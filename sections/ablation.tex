@@ -1,0 +1,67 @@
+trying out 7 variations.
+no proof: does not asks for mathetical consistency and proof
+no constraints: removing all avoidance instruction of harmful optimization
+minimal: just asking for optimized version in one sentence nothing else
+no explanation: removes the need for explanation
+no format: removes the instruction for structured output
+no hardware: removes all the hardware specific guardrails
+cot: adding a "think step by step about bottlenecks before writing code" in the instructions
+
+We evaluate seven prompt variants, each removing or modifying a single component of the full prompt,
+to isolate the contribution of individual design choices to optimization quality and reliability.
+
+\paragraph{No Proof (\texttt{no\_proof}).}
+The full prompt requires the model to provide a formal justification that the optimized kernel is
+semantically equivalent to the original. Removing this requirement allows the model to apply
+transformations without verifying correctness. This is consequential: on \texttt{shmembench},
+the swap loop preserves an algebraic sum invariant, and without the proof requirement Gemini~2.5~Pro
+exploits this to eliminate all shared memory operations entirely, producing a 213$\times$ apparent
+speedup that does not reflect genuine hardware improvement. GPT-5 applies this transformation
+regardless of variant.
+
+\paragraph{No Constraints (\texttt{no\_constraints}).}
+The full prompt includes explicit avoidance instructions, such as prohibitions against kernel fusion,
+entry-point renaming, and modifications that sacrifice correctness for speed. Removing these
+instructions gives the model unconstrained freedom to restructure the code. This can expose
+creative optimizations that the constraints would otherwise suppress, but also risks producing
+semantically incorrect or benchmark-invalidating optimizations.
+
+\paragraph{Minimal (\texttt{minimal}).}
+Rather than providing profiling context, roofline data, and structured instructions, this variant
+reduces the prompt to a single sentence: \textit{``Optimize this CUDA kernel.''}
+The model receives the kernel source with no information about where bottlenecks occur.
+Without this context, the model must guess the optimization target, which frequently results
+in degraded performance. On \texttt{md5hash}, GPT-5 under \texttt{minimal} produced code
+51\% slower than the best-performing variant, consistent with optimizing the wrong bottleneck.
+
+\paragraph{No Explanation (\texttt{no\_explanation}).}
+The full prompt asks the model to accompany its code with a natural-language explanation of
+each change and its rationale. Removing this requirement eliminates a form of implicit
+chain-of-thought: articulating a justification encourages careful reasoning before committing
+to a transformation. Without it, the model skips this reasoning step and proceeds directly
+to code generation, which can increase the rate of subtle errors.
+
+\paragraph{No Format (\texttt{no\_format}).}
+The full prompt specifies a structured output format: optimized code in a fenced code block,
+followed by a bulleted list of changes. Removing this specification causes the model to produce
+free-form output, which may intermix explanation with code, embed code in prose, or omit
+fenced delimiters entirely. This primarily affects the reliability of automated code extraction
+rather than the quality of the optimization itself.
+
+\paragraph{No Hardware (\texttt{no\_hardware}).}
+The full prompt includes hardware-specific guardrails, such as the target compute capability,
+shared memory limits per block, and a list of warp-level primitives unavailable on the target
+architecture. Without these constraints, the model may generate code that is valid in principle
+but incompatible with the deployment target. This is the primary cause of Gemini's compile
+failures on \texttt{sobol} under \texttt{cot}: the model introduced \texttt{\_\_builtin\_ctz},
+a host-only intrinsic, inside a \texttt{\_\_global\_\_} kernel, and could not correct the error
+across three repair iterations.
+
+\paragraph{Chain-of-Thought (\texttt{cot}).}
+Unlike the other variants, \texttt{cot} adds rather than removes a prompt component.
+A single instruction is prepended: \textit{``Think step by step about the performance bottlenecks
+before writing any code.''}
+This encourages the model to reason explicitly about profiling evidence prior to generating
+the optimized kernel. Across both models and most benchmarks, \texttt{cot} is the most
+consistently stable variant, producing results at or near the best observed performance with
+no additional repair iterations relative to the full prompt.

@@ -1,0 +1,78 @@
+The ablation study evaluated GPT-5 and Gemini 2.5 Pro across six prompt variants and six HeCBench benchmarks, yielding 72 experimental runs in total (2 models × 6 variants × 6 apps). Across all successful runs, GPT-5 demonstrated consistently higher first-attempt success rates, requiring only a single build iteration in 32 of 36 cases compared to Gemini's 24 of 36. Gemini exhausted all three repair iterations on 8 runs (4 failures, 4 eventually repaired), with sobol being its most problematic benchmark (3 outright failures due to correctness violations and a persistent `\_\_builtin\_ctz` host-device mismatch).
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.88}
+\caption{%
+  Ablation study: runtime (\textmu s) and outcome across six HeCBench benchmarks and six prompt variants for GPT-5 and Gemini~2.5~Pro.
+  Speedup relative to unoptimized baseline (bitonic-sort: 51{,}590\,\textmu s; sobol: 2{,}576\,\textmu s; shmembench: 4{,}816\,\textmu s);
+  ``---'' = no baseline available.
+  \textbf{Bold} = best valid speedup per benchmark per model.
+  Result: \textit{s1} = first attempt; \textit{rep}$_n$ = repaired in $n$ iterations; \textit{fail} = all 3 failed; \textit{T/O} = timeout.
+  $^\dagger$ benchmark gaming (shared memory algebraically eliminated);
+  $^*$ runtime extraction failure.
+}
+\label{tab:ablation}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llrrcrrcc@{}}
+\toprule
+\multirow{2}{*}{\textbf{Benchmark}}
+  & \multirow{2}{*}{\textbf{Variant}}
+  & \multicolumn{3}{c}{\textbf{GPT-5}}
+  & \multicolumn{4}{c}{\textbf{Gemini 2.5 Pro}} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-9}
+  & & \textbf{Runtime (\textmu s)} & \textbf{Speedup} & \textbf{Result}
+    & & \textbf{Runtime (\textmu s)} & \textbf{Speedup} & \textbf{Result} \\
+\midrule
+\multirow{6}{*}{\texttt{atan2}}
+  & \texttt{no\_explanation} &  91.08 & --- & \textit{s1}       &&  92.41 & --- & \textit{s1}      \\
+  & \texttt{minimal}         &  97.53 & --- & \textit{s1}       &&  92.27 & --- & \textit{rep}$_2$ \\
+  & \texttt{no\_constraints} &  94.01 & --- & \textit{s1}       &&  91.22 & --- & \textit{s1}      \\
+  & \texttt{cot}             &  87.47 & --- & \textit{s1}       &&    --- & --- & \textit{fail}    \\
+  & \texttt{no\_proof}       &  89.00 & --- & \textit{s1}       &&  92.63 & --- & \textit{s1}      \\
+  & \texttt{no\_role}        &  87.76 & --- & \textit{s1}       &&  91.59 & --- & \textit{s1}      \\
+\midrule
+\multirow{6}{*}{\texttt{bitonic-sort}}
+  & \texttt{no\_explanation} & 57{,}277 & 0.90$\times$          & \textit{s1} && 45{,}681 & \textbf{1.13}$\times$ & \textit{rep}$_2$ \\
+  & \texttt{minimal}         & 55{,}820 & 0.92$\times$          & \textit{s1} && 55{,}181 & 0.93$\times$          & \textit{s1}      \\
+  & \texttt{no\_constraints} & 45{,}364 & \textbf{1.14}$\times$ & \textit{s1} && 57{,}022 & 0.90$\times$          & \textit{rep}$_2$ \\
+  & \texttt{cot}             & 45{,}450 & \textbf{1.14}$\times$ & \textit{s1} && 45{,}678 & \textbf{1.13}$\times$ & \textit{s1}      \\
+  & \texttt{no\_proof}       & 45{,}342 & \textbf{1.14}$\times$ & \textit{s1} && 57{,}288 & 0.90$\times$          & \textit{rep}$_2$ \\
+  & \texttt{no\_role}        & 57{,}370 & 0.90$\times$          & \textit{s1} && 54{,}613 & 0.94$\times$          & \textit{s1}      \\
+\midrule
+\multirow{6}{*}{\texttt{md5hash}}
+  & \texttt{no\_explanation} & 262{,}600 & --- & \textit{s1}      && 299{,}200 & --- & \textit{s1}      \\
+  & \texttt{minimal}         & 396{,}800 & --- & \textit{s1}      && 288{,}700 & --- & \textit{s1}      \\
+  & \texttt{no\_constraints} & 262{,}600 & --- & \textit{s1}      && 296{,}500 & --- & \textit{s1}      \\
+  & \texttt{cot}             & 295{,}200 & --- & \textit{s1}      && 296{,}900 & --- & \textit{s1}      \\
+  & \texttt{no\_proof}       & 262{,}500 & --- & \textit{rep}$_3$ && 301{,}400 & --- & \textit{s1}      \\
+  & \texttt{no\_role}        & 293{,}100 & --- & \textit{s1}      && 299{,}500 & --- & \textit{s1}      \\
+\midrule
+\multirow{6}{*}{\texttt{accuracy}}
+  & \texttt{no\_explanation} & 214.83 & --- & \textit{s1}       && 213.27 & --- & \textit{s1}      \\
+  & \texttt{minimal}         & 282.68 & --- & \textit{s1}       && 294.74 & --- & \textit{s1}      \\
+  & \texttt{no\_constraints} & 213.70 & --- & \textit{s1}       && 296.44 & --- & \textit{s1}      \\
+  & \texttt{cot}             & 215.38 & --- & \textit{s1}       && 214.90 & --- & \textit{s1}      \\
+  & \texttt{no\_proof}       & 214.08 & --- & \textit{rep}$_2$  && 308.62 & --- & \textit{s1}      \\
+  & \texttt{no\_role}        &    --- & --- & \textit{T/O}      && 296.31 & --- & \textit{s1}      \\
+\midrule
+\multirow{6}{*}{\texttt{sobol}}
+  & \texttt{no\_explanation} & 2{,}660.79 & 0.97$\times$          & \textit{s1}      &&          --- & ---          & \textit{fail}    \\
+  & \texttt{minimal}         & 2{,}824.18 & 0.91$\times$          & \textit{s1}      && 2{,}574.01   & 1.00$\times$ & \textit{rep}$_3$ \\
+  & \texttt{no\_constraints} &        --- & ---$^*$               & \textit{s1}$^*$  && 2{,}620.28   & 0.98$\times$ & \textit{s1}      \\
+  & \texttt{cot}             & 2{,}809.94 & 0.92$\times$          & \textit{s1}      &&          --- & ---          & \textit{fail}    \\
+  & \texttt{no\_proof}       & 2{,}814.58 & 0.92$\times$          & \textit{s1}      && 2{,}575.83   & 1.00$\times$ & \textit{rep}$_3$ \\
+  & \texttt{no\_role}        & 2{,}623.37 & \textbf{0.98}$\times$ & \textit{s1}      &&          --- & ---          & \textit{fail}    \\
+\midrule
+\multirow{6}{*}{\texttt{shmembench}}
+  & \texttt{no\_explanation} &    20.46 & 235$\times^\dagger$          & \textit{s1}$^\dagger$ &&  9{,}145 & 0.53$\times$          & \textit{s1}           \\
+  & \texttt{minimal}         &     5.08 & 949$\times^\dagger$          & \textit{s1}$^\dagger$ && 18{,}735 & 0.26$\times$          & \textit{s1}           \\
+  & \texttt{no\_constraints} &    20.47 & 235$\times^\dagger$          & \textit{s1}$^\dagger$ &&  4{,}661 & \textbf{1.03}$\times$ & \textit{s1}           \\
+  & \texttt{cot}             &    20.49 & 235$\times^\dagger$          & \textit{s1}$^\dagger$ &&  4{,}661 & \textbf{1.03}$\times$ & \textit{s1}           \\
+  & \texttt{no\_proof}       &    20.49 & 235$\times^\dagger$          & \textit{s1}$^\dagger$ &&    22.66 & 213$\times^\dagger$   & \textit{s1}$^\dagger$ \\
+  & \texttt{no\_role}        &    20.50 & 235$\times^\dagger$          & \textit{s1}$^\dagger$ &&  4{,}817 & 1.00$\times$          & \textit{s1}           \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}
