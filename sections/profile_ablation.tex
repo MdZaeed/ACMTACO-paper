@@ -1,0 +1,67 @@
+Section~\ref{sec:ablation} ablates components \emph{within} the prompt while always supplying profiling
+data. The prior question---whether the profiling data helps at all---requires an arm with no profile
+data, which we add here.
+
+\paragraph{Arms.}
+The \texttt{pcrl} arm is the standard prompt carrying PC-sampling and roofline summaries only (no
+derived kernel-budget, occupancy or diagnostic summaries). The \texttt{code\_only} arm removes the
+entire performance-analysis block. Removing it alone would bias the comparison, because four
+instruction sentences refer to the data---most importantly the rule \textit{``if no safe substantive
+optimization can be justified from the provided performance data, keep the code semantically
+unchanged''}, which would invite a no-op when no data is present. Those four sentences are therefore
+reworded to refer to the model's analysis of the source; the two prompts are otherwise byte-identical
+(verified: the diff is the removed block plus those four sentences). Both arms were regenerated with
+the same code base, and all pairs use the same correctness gates and interleaved measurement as
+Section~\ref{sec:realapps}.
+
+\paragraph{Result.}
+Profiling data helps on the large real application and makes no measurable difference on the small
+benchmarks (Table~\ref{tab:profabl}). On Cholla both models are clearly faster with the profile
+($+11.5\%$ for GPT-5, $+7.7\%$ for Gemini), and two independently generated \texttt{pcrl} samples
+reproduce the effect. On AutoDock-GPU both arms reach the same ${\sim}1.03\times$. Across the HeCBench
+pairs completed so far, every valid comparison is a tie within the measured spread.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{Profile-data ablation: speedup against the unmodified application for the prompt without
+  profile data (\texttt{co}) and with PC sampling + roofline (\texttt{pcrl}), and their ratio.
+  HeCBench rows are the completed subset; all are ties within spread.}
+\label{tab:profabl}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+\textbf{Application} & \textbf{Model} & \textbf{co} & \textbf{pcrl} & \textbf{pcrl/co} \\
+\midrule
+\multirow{2}{*}{Cholla}
+  & GPT-5  & 1.324$\times$ & \textbf{1.476}$\times$ & \textbf{1.115} \\
+  & Gemini & 1.471$\times$ & \textbf{1.584}$\times$ & \textbf{1.077} \\
+\midrule
+\multirow{2}{*}{AutoDock-GPU}
+  & GPT-5  & 1.030$\times$ & 1.031$\times$ & 1.001 \\
+  & Gemini & 1.035$\times$ & 1.035$\times$ & 1.000 \\
+\midrule
+HeCBench (9 apps) & GPT-5 & \multicolumn{3}{c}{all ties ($0.999$--$1.002$)} \\
+HeCBench (6 apps) & Gemini & \multicolumn{3}{c}{ties; 3 rows too noisy to score} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Correctness, not only speed.}
+Two HeCBench pairs favour the profile arm on correctness rather than time. On
+\texttt{background-subtract}, GPT-5 without profile data failed the application's own output check in
+all three repair iterations and produced no usable candidate, while the \texttt{pcrl} arm produced a
+correct one; on \texttt{atomicSystemWide}, the \texttt{code\_only} candidate fails verification and the
+\texttt{pcrl} candidate does not.
+
+\paragraph{Interpretation.}
+The pattern is consistent with the workloads rather than with the models. A HeCBench kernel is a few
+hundred lines with one obvious hot loop, and the profile tells a model little it cannot infer from the
+source. Cholla's HLLC solver is 307 lines inside a 21k-line CUDA application whose cost is spread over
+several kernels; there the profile identifies both the kernel worth editing and the reason it is slow
+(latency-bound at $19.7\%$ DRAM and $40.4\%$ SM throughput, occupancy $23\%$ limited by 109 registers
+per thread). We therefore expect profile data to pay off in proportion to how hard the bottleneck is to
+locate from source alone---which is precisely the regime real applications occupy.
+
+\tzi{Gemini HeCBench rows (boxfilter, ccsd-trpdrv, chemv, concat, convolutionSeparable) are still
+running; \texttt{boxfilter} and \texttt{ccsd-trpdrv} are skipped on the H100 node because the
+unmodified applications exceed the per-run time cap. Update the table when they land.}

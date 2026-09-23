@@ -1,0 +1,48 @@
+Section~\ref{sec:analysis} motivates an explicit computational-intent constraint to prevent models
+from replacing the computation rather than optimizing it. We implemented that constraint and measured
+its effect directly.
+
+\paragraph{Constraint text.}
+The prompt gains a \emph{semantic preservation} block stating that the model may change \emph{how} a
+computation executes (data placement, memory layout and access pattern, thread/block mapping,
+vectorization, unrolling, loop fusion/tiling/reordering, hoisting loop-invariant work) but may not
+change \emph{what} is computed or how much work is done. In particular it may not reduce the number of
+algorithm-level operations by exploiting algebraic identities, change the iteration count of a timing,
+repeat or convergence loop, precompute at compile time a value the program computes at run time, skip
+work on the grounds that the program's own verification would still pass, or alter printed output.
+The rule is deliberately scoped to \emph{benchmark scaffolding}; eliminating genuine redundancy inside
+an application remains allowed, since that is the goal for real codes.
+
+\paragraph{Effect.}
+Table~\ref{tab:intent} reports the \texttt{atomicSystemWide} benchmark, whose purpose is to measure
+system-wide atomic throughput. Without the constraint, both models delete the atomic loop the benchmark
+exists to measure and report three-order-of-magnitude ``speedups'' while output and the built-in
+verification are unchanged; GPT-5's own source comment reads \textit{``one store per warp is sufficient
+for postcondition used by verification.''} With the constraint, both return honest---and slightly
+negative---results. The two arms were generated and measured in the same session, differing only in the
+prompt text.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{Effect of the semantic-preservation (computational-intent) constraint on
+  \texttt{atomicSystemWide}. Speedups are interleaved medians against the unmodified benchmark.
+  Apparent speedups are benchmark gaming: the measured operation is removed.}
+\label{tab:intent}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+\textbf{Model} & \textbf{Without constraint} & \textbf{With constraint} \\
+\midrule
+GPT-5              & 1504$\times^\dagger$ & 0.94$\times$ \\
+Gemini 3.1 Pro     & 2809$\times^\dagger$ & 0.71$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Detection.}
+Neither output comparison nor the benchmark's own PASS check detects this class of transformation, by
+construction: the exploit preserves the printed result. In our pipeline it was caught by an
+implausibility threshold ($>5\times$) followed by manual inspection of the diff. We therefore treat any
+speedup above that threshold as a correctness alarm rather than a result; the same rule later exposed a
+$31\times$ \texttt{amgmk} candidate that had deleted the benchmark's report sections, and a $3.25\times$
+LAMMPS candidate that was computing wrong physics (Section~\ref{sec:realapps}).

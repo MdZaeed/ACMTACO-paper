@@ -1,0 +1,72 @@
+\paragraph{Measurement on shared hardware.}
+All experiments ran on shared GPU nodes. Identical code drifted by up to $49\%$ between sessions, so we
+build every arm once, time them round-robin in a single session, wait for an idle GPU, log other users'
+GPU processes at the start and end of every repetition, and report medians over clean repetitions only.
+Two complete timing passes were discarded because other users' jobs occupied the GPU. Even so,
+detection is imperfect: in one Cholla pass three repetitions drifted by $15\%$ while our detector
+reported no foreign GPU process, so we additionally require repetitions to agree before using them.
+Residual interference cannot be excluded on a shared machine, and small effects
+($\lesssim 2\%$) should not be read as real.
+
+\paragraph{Sampling of model outputs.}
+Except where stated, each (application, model, prompt) cell is a \emph{single} LLM sample. Language
+model outputs vary between calls, so a single cell conflates prompt effect with sampling variance. We
+replicated two settings---a second independent generation round for the structural/diagnostic arms, and
+a second profile-data sample for the real applications---and the direction of the effect was stable
+there, but the per-cell numbers in Section~\ref{sec:results} carry no confidence interval. Effects
+below roughly $5\%$ should be treated as unresolved.
+
+\paragraph{Hardware and software scope.}
+Results cover NVIDIA GPUs only: A100 (sm\_80) for the prompt ablation, GH200 and H100 PCIe (sm\_90) for
+the real applications, with CUDA 12.6.3. Conclusions may not transfer across architectures: a
+diagnostics-prompt gain of $1.37\times$ on \texttt{bincount} measured on GH200 did not reproduce on the
+H100 ($0.99\times$). We use two proprietary models whose weights and versions we do not control; the
+same prompt may behave differently after a model update.
+
+\paragraph{Correctness gates are empirical, not proofs.}
+Each application is gated by its own output: bit-exact field comparison where the application is
+deterministic (LAMMPS, Cholla) and a statistical band where it is not (AutoDock-GPU, whose GPU results
+vary run to run even with a fixed seed). We validated every gate by injecting faults, and the Cholla
+gate detects a $10^{-6}$ relative perturbation of a single flux. Nevertheless a subtle accuracy loss
+that stays inside the AutoDock band would pass, gates check the outputs the application prints rather
+than all internal state, and undefined behaviour can pass one build and fail another---our own
+hand-tuned LAMMPS variant did exactly that, producing correct physics in one build and wrong physics in
+a rebuild of the same source. We therefore gate every build that is timed, but ``gated correct'' means
+``passed these checks'', not ``verified''.
+
+\paragraph{Benchmark gaming is detected heuristically.}
+Transformations that delete the measured work while preserving printed output defeat output comparison
+by construction (Section~\ref{sec:intent}). We flag speedups above $5\times$ and inspect the diff. This
+catches the large cases we observed ($1504\times$, $2809\times$, $235$--$949\times$, $31\times$), but a
+gaming transformation yielding, say, $1.5\times$ would not be flagged automatically, and we cannot rule
+out such cases in the reported numbers.
+
+\paragraph{Single-file editing.}
+The pipeline gives the model one source file and replaces that file. The model therefore cannot change
+headers, launch sites or build flags, and---more importantly---cannot see how its file is compiled.
+This caused three of our real-application failures (symbol redefinition in a textually included file,
+and kernel-signature changes that broke linkage against ten call sites). Some optimizations a human
+would make are out of reach by construction.
+
+\paragraph{Tooling defects discovered during the study.}
+Several defects in our own summarizers were found while running the real applications, and earlier
+prompts were generated with them: shared-memory sizes were reported without their unit (a kernel using
+$7.43$\,Kbyte appeared as ``7 bytes''); a PC-sampling parser dropped rows whose section header differed,
+truncating the stall data for three benchmarks (for \texttt{xsbench}, 36 of 76 rows survived); true
+kernel launch counts never matched namespaced or templated kernel names, so aggregate cost was
+understated; comment stripping removed license headers from every generated file; and the build timeout
+was reported to the model as a fault in its own code. These are fixed, but results predating the fixes
+were produced with the affected prompts and would need regeneration to be strictly comparable.
+
+\paragraph{Coverage of the profile-data ablation.}
+The comparison in Section~\ref{sec:profabl} covers 26 (application, model) pairs, of which two
+benchmarks (\texttt{boxfilter}, \texttt{ccsd-trpdrv}) could not be timed on the available node because
+the \emph{unmodified} applications exceed our per-run cap, and two others (\texttt{adv},
+\texttt{background-subtract}) fail their own built-in check in the unmodified state on that node, so
+their gate carries no information there. The remaining denominator is small, and the positive result
+rests on one application (Cholla) with two models.
+
+\paragraph{Scope of the objective.}
+We optimize execution time of a single GPU kernel file under a correctness gate. We do not study
+energy, memory footprint, multi-GPU scaling, numerical stability under long runs, or maintainability of
+the generated code---all of which matter for production use of these applications.

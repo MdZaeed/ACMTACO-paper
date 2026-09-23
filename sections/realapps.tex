@@ -1,0 +1,121 @@
+The ablation of Section~\ref{sec:ablation} uses single-file HeCBench kernels. To test whether the
+pipeline transfers to production scientific software, we applied it end to end to three real
+applications. Unless stated otherwise, experiments in this section use GPT-5 and Gemini~3.1~Pro
+(not Gemini~2.5~Pro as in Section~\ref{sec:results}) on an NVIDIA GH200 (sm\_90); the LAMMPS and
+Cholla profiles were collected on the same device on which they were measured.
+
+\subsection{Applications and targets}
+Table~\ref{tab:apps} lists the applications. For each, we profiled the whole application with Nsight
+Systems and Nsight Compute, selected the source file containing the dominant kernel, and gave the
+pipeline that single file to optimize, exactly as for a benchmark.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{Real applications, optimization targets, and the share of GPU time held by the target kernel.}
+\label{tab:apps}
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Application} & \textbf{Target file (hot kernel)} & \textbf{Share} \\
+\midrule
+AutoDock-GPU & \texttt{calcMergeEneGra.cu} & 98.7\% \\
+LAMMPS (Kokkos) & \texttt{pair\_eam\_kokkos.cpp} & 62--68\% \\
+Cholla & \texttt{hllc\_cuda.cu} (HLLC solver) & 56.0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Correctness gates}
+Benchmarks ship a PASS/FAIL check; applications do not, and their outputs are not always reproducible.
+We therefore built one gate per application and validated each gate negatively as well as positively:
+\begin{itemize}\itemsep2pt
+  \item \textbf{AutoDock-GPU} is stochastic on the GPU even with a fixed seed (best energies
+    $-13.89$, $-14.38$, $-14.01$\,kcal/mol for one binary), so the gate is a band: 50 poses and best
+    energy $\le -12.5$\,kcal/mol. Negative test: flipping the gradient sign yields $-0.53$ (FAIL).
+  \item \textbf{LAMMPS} with a full neighbour list is bit-deterministic, so the gate compares step-0
+    energies at $10^{-6}$ relative tolerance and total energy after 500 NVE steps within $0.1\%$.
+    Negative test: a flipped force sign makes the simulation explode (FAIL).
+  \item \textbf{Cholla} is bit-deterministic; the gate compares the full 3D snapshot field by field
+    (relative $L_1 \le 10^{-9}$, relative max $\le 10^{-6}$) after 137 steps. Negative tests: a flipped
+    energy-flux sign diverges (FAIL) and a $10^{-6}$ relative perturbation of one flux is caught
+    ($L_1 \approx 10^{-6}$, three orders of magnitude over tolerance).
+\end{itemize}
+Every candidate reported below passed its gate.
+
+\subsection{Measurement}
+Application time is taken from each application's own phase timer, never wall clock (AutoDock's CUDA
+setup alone is 68\,s on a cold driver). All arms of an application are built once and timed
+round-robin in a single session; we wait for an idle GPU, log other users' GPU jobs at the start and
+end of every repetition, and take medians over clean repetitions only. This is necessary rather than
+pedantic: on our shared nodes identical code drifted by up to $49\%$ between sessions, two full timing
+passes were invalidated by other users' jobs, and the pipeline's own in-loop timing was off by $15\%$
+for one arm.
+
+\subsection{Results}
+Table~\ref{tab:realapps} reports speedups against the unmodified application. \emph{Baseline} is the
+prompt of Section~\ref{sec:method} with PC-sampling and roofline data; \emph{structural} additionally
+relaxes the syntactic constraints and adds derived kernel-budget and occupancy summaries; \emph{hand}
+is an expert reference restricted to the same single file.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{Real-application speedups (interleaved medians, idle GPU, all gated correct).
+  $^\ddagger$ withdrawn: see Section~\ref{sec:realapps}. ``---'' = not run.}
+\label{tab:realapps}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+\textbf{Application} & \textbf{Arm} & \textbf{GPT-5} & \textbf{Gemini} & \textbf{Hand} \\
+\midrule
+\multirow{2}{*}{AutoDock-GPU}
+  & baseline    & 0.990$\times$ & 1.037$\times$ & \multirow{2}{*}{\textbf{1.532}$\times$} \\
+  & structural  & fail          & 1.001$\times$ & \\
+\midrule
+\multirow{2}{*}{LAMMPS}
+  & baseline    & 0.997$\times$ & \textbf{1.027}$\times$ & \multirow{2}{*}{1.023$\times$} \\
+  & structural  & ---           & 1.001$\times$ & \\
+\midrule
+\multirow{2}{*}{Cholla}
+  & baseline    & \textbf{1.571}$\times$ & 1.504$\times$ & \multirow{2}{*}{1.468$\times$} \\
+  & structural  & 0.992$\times$ & 1.469$\times$ & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Models find local, exact transformations; they do not restructure.}
+On Cholla the best model output (GPT-5, $1.571\times$) beats the hand reference ($1.468\times$): both
+replace 18 double-precision divisions by 6 reciprocal multiplications, and GPT-5 additionally removes
+integer index arithmetic used only for a bounds check, reducing register pressure from 109 to 89
+registers per thread without spilling. On AutoDock-GPU, by contrast, the profitable change is a
+cross-cutting restructuring---fusing seven sequential block reductions, each with three barriers and a
+shared-memory atomic, into one pass---worth $1.532\times$ by hand. \emph{All four} model outputs
+(two models $\times$ two prompts) left all seven reductions in place and gained at most $3.7\%$.
+
+\paragraph{The structural prompt never helped and broke real builds.}
+Its contract was written for single-file benchmarks: it permits signature changes and states that the
+returned file must be self-contained. In Cholla the target kernel is declared in a header and called
+from ten sites in other translation units; both models changed the signature and both produced linker
+errors, each needing a repair iteration to revert. On AutoDock-GPU, whose target file is
+\texttt{\#include}d into another translation unit, GPT-5 redefined symbols already in scope and then
+produced an out-of-bounds global read (found with \texttt{compute-sanitizer}), failing all three
+iterations.
+
+\paragraph{Single-file editing is blind to compilation context.}
+The three failures above share one cause: the model cannot see how its file is compiled---whether it is
+a standalone translation unit or textually included, which symbols are already in scope, and which
+declarations other files depend on. This does not arise for self-contained benchmarks and is, in our
+experience, the dominant failure mode on real code.
+
+\paragraph{The human reference is not automatically correct.}
+Our first LAMMPS hand-tuned version constructed Kokkos \texttt{RandomAccess} views inside device code.
+The identical source passed the gate in one build (at $0.955\times$) and produced deterministically
+wrong physics in a rebuild (step-0 potential energy $+1.02\times10^{6}$ instead of $-7.25\times10^{6}$),
+which then ``measured'' $3.25\times$. It was withdrawn. We therefore gate \emph{every} build that is
+timed, not only the first, and treat implausible speedups as correctness alarms.
+
+\paragraph{The target must dominate end-to-end time.}
+With LAMMPS's GPU package driven by a single host core, the CUDA pair kernel is only $7.7$--$7.9\%$ of
+loop time (integration and ghost-atom exchange stay on the CPU), capping any kernel-level optimization
+at ${\sim}8\%$ by Amdahl's law. We switched to the Kokkos backend, where the whole timestep runs on the
+GPU ($94\%$ GPU-busy), before evaluating. A kernel can be $99\%$ of GPU time and still a small fraction
+of the application.
