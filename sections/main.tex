@@ -8,6 +8,8 @@
 \usepackage{times}
 \usepackage{latexsym}
 
+\usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{graphicx}
@@ -43,7 +45,9 @@
 %
 % and set <dim> to something 5cm or larger.
 
-\title{Instructions for *ACL Proceedings}
+\title{Prompting for Performance: Profile-Guided LLM Optimization\\
+       of Real GPU Applications}
+% \tzi{working title -- replace if you have a preferred one}
 
 % Author information can be set in various styles:
 % For several authors from the same institution:
@@ -113,7 +117,7 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-\input{sections/abstract}
+\input{abstract}
 \end{abstract}
 
 \section{Introduction}
@@ -148,11 +152,15 @@
 \label{sec:profabl}
 \input{profile_ablation}
 
+\section{When Profiling Data Becomes Prescriptive}
+\label{sec:guidvar}
+\input{guidance_variance}
+
 \section{Analysis}
 \label{sec:analysis}
 \input{analysis}
 
-\section{Related Word}
+\section{Related Work}
 \label{sec:relatedwork}
 \input{relatedWork}
 

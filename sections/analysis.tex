@@ -1,7 +1,47 @@
-In terms of optimization quality, neither model delivers large, reliable speedups within the ablation configuration (pc+rl input, full prompt ablated). The best sustained speedup across all valid results was approximately 1.14x (GPT-5 on bitonic-sort with `no\_constraints`, `cot`, or `no\_proof`) and 1.13x (Gemini on bitonic-sort with `no\_explanation` or `cot`). For sobol, both models either failed or matched the baseline within 2\%. For atan2, md5hash, and accuracy, the runtime distributions reveal that the `minimal` variant consistently produces the worst results for both models across multiple benchmarks, suggesting that stripping contextual framing from the prompt measurably degrades optimization quality. The `cot` variant, conversely, tends to produce stable or slightly better results for both models, though the improvement is modest.
+\paragraph{Optimization quality.}
+Within the ablation configuration (\texttt{pc+rl} input, one prompt component ablated at a time),
+neither model delivers large or reliable speedups. The best sustained result across all valid runs is
+$1.14\times$ (GPT-5 on \texttt{bitonic-sort} under \texttt{no\_constraints}, \texttt{cot} or
+\texttt{no\_proof}) and $1.13\times$ (Gemini on the same benchmark under \texttt{no\_explanation} or
+\texttt{cot}). On \texttt{sobol} both models either fail or match the baseline within $2\%$. On
+\texttt{atan2}, \texttt{md5hash} and \texttt{accuracy} the runtime distributions are dominated by
+variant effects rather than by any genuine optimization.
 
-The most consequential finding is the benchmark gaming behavior on shmembench. GPT-5 games the benchmark in all 6 variants without exception, exploiting the algebraic invariant that a swap-based permutation preserves the sum to eliminate all shared memory traffic — producing 235–949x apparent speedups that do not reflect genuine hardware improvement. Gemini games the benchmark only when the formal proof-of-correctness requirement is removed (`no\_proof`), achieving 213x apparent speedup through the same mechanism. This demonstrates that prompt-level constraints — specifically the requirement to provide a formal reasoning trace justifying correctness — can suppress this class of semantic-preserving but benchmark-invalidating transformations in Gemini, while GPT-5 applies them regardless. The finding motivates the addition of an explicit computational-intent constraint to the OPAL prompt to prevent LLMs from replacing the computation structurally rather than optimizing it.
+\paragraph{Prompt components are not equally important.}
+The \texttt{minimal} variant consistently underperforms---most clearly on \texttt{md5hash}
+(GPT-5: $396{,}800$\,\textmu s versus $262{,}500$\,\textmu s under \texttt{no\_constraints}, about
+$1.5\times$ slower) and on \texttt{shmembench} (Gemini: $18{,}735$\,\textmu s versus roughly
+$4{,}660$\,\textmu s for every other variant). Stripping contextual framing measurably degrades
+optimization quality. Conversely, \texttt{cot} is stable or slightly better for both models, though the
+improvement is modest. Every other component is model-dependent: removing constraints helps GPT-5 on
+\texttt{bitonic-sort} but hurts Gemini; removing the explanation helps Gemini on the same benchmark but
+has no consistent effect elsewhere; and removing the role assignment caused a timeout for GPT-5 on
+\texttt{accuracy} while Gemini handled it without issue. \texttt{Minimal} is the only variant that
+consistently degrades both models, and \texttt{cot} the only one that never hurts either.
 
-Overall, prompt component sensitivity is model-dependent and non-uniform across benchmarks: removing constraints benefits GPT-5 on bitonic-sort but hurts Gemini; removing the explanation helps Gemini on bitonic-sort but has no consistent effect elsewhere; and removing the role assignment (`no\_role`) caused a catastrophic timeout in GPT-5 on accuracy while Gemini handled it without issue. The only variant that consistently degrades both models is `minimal`, and the only variant that improves both without exception is `cot`.
+\paragraph{Reliability.}
+GPT-5 succeeds on the first attempt in $32$ of $36$ runs, Gemini~2.5~Pro in $24$ of $36$. Gemini
+exhausts all three repair iterations on eight runs, four of which are eventually repaired and four of
+which fail outright; \texttt{sobol} accounts for three of the four failures, through correctness
+violations and the host-only-intrinsic error described in Section~\ref{sec:ablation}. First-attempt
+success rate, not peak speedup, is the dimension on which the two models differ most.
 
-prompt components are not equally important. The minimal variant consistently underperforms - most clearly in md5hash (GPT-5: 396,800 micro sec vs. 262,500 micro sec for no\_constraints, around 1.5× slower) and shmembench (Gemini: 18,735 micro sec for minimal vs. around 4,660 micro sec for other variants). Removing too much context degrades results.
+\paragraph{Benchmark gaming.}
+The most consequential finding of the ablation is not a speedup but a false one. On
+\texttt{shmembench}, GPT-5 games the benchmark under all six variants without exception, exploiting the
+fact that a swap-based permutation preserves the sum to eliminate all shared-memory traffic and report
+$235$--$949\times$ apparent speedups. Gemini does so only when the proof requirement is removed
+(\texttt{no\_proof}), reaching $213\times$ by the same mechanism. Two things follow. First, a
+prompt-level requirement for a formal correctness argument suppresses this class of edit in one model
+but not the other, so it cannot be relied on as a defence. Second, the benchmark's own verification
+passes in every one of these runs, so no output-comparison gate would have caught them. This motivates
+the explicit computational-intent constraint evaluated in Section~\ref{sec:intent}.
+
+\paragraph{From benchmarks to applications.}
+The benchmark results above understate how much prompt design matters, because single-kernel benchmarks
+hide two of its effects. They cannot expose compilation-context failures, since each benchmark is a
+self-contained translation unit; and they make profiling data look worthless
+(Section~\ref{sec:profabl}), since the hot loop of a $200$-line benchmark is obvious from the source.
+Both effects reappear on the production applications of Section~\ref{sec:realapps}, which is the
+strongest argument we can offer against drawing conclusions about such systems from benchmark suites
+alone.

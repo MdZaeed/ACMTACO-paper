@@ -1,2 +1,35 @@
-benchmarks: atan2, bitonic-sort, md5hash, sobol, shmembench.
-ran on sm\_80 and A100. LLMs used gpt-5, gemini2.5 pro, llama3.1:70B and (llama2:7B, qwencode:14B).
+We run two families of experiments: a prompt-component ablation on single-kernel benchmarks, and an
+end-to-end study on production applications.
+
+\paragraph{Benchmarks.}
+The prompt ablation uses six HeCBench \cite{jin2023hecbench} CUDA benchmarks---\texttt{atan2},
+\texttt{bitonic-sort}, \texttt{md5hash}, \texttt{accuracy}, \texttt{sobol} and
+\texttt{shmembench}---chosen to span memory-bound and compute-bound behaviour and to include kernels
+with built-in verification. The profile-data ablation (Section~\ref{sec:profabl}) uses a further eleven
+HeCBench applications: \texttt{adv}, \texttt{amgmk}, \texttt{atomicSystemWide},
+\texttt{background-subtract}, \texttt{bincount}, \texttt{blockAccess}, \texttt{boxfilter},
+\texttt{ccsd-trpdrv}, \texttt{chemv}, \texttt{concat} and \texttt{convolutionSeparable}.
+
+\paragraph{Applications.}
+The end-to-end study uses three production codes: AutoDock-GPU (molecular docking, CUDA),
+LAMMPS (molecular dynamics, Kokkos/CUDA) and Cholla (astrophysical hydrodynamics, CUDA). Each is built
+from its own build system with its own inputs, and validated by a gate derived from its scientific
+output rather than from a benchmark harness (Section~\ref{sec:realapps}).
+
+\paragraph{Models.}
+The reported prompt-ablation grid uses GPT-5 and Gemini~2.5~Pro. The application and profile-data
+studies use GPT-5 and Gemini~3.1~Pro; we note the model change explicitly wherever numbers from the two
+studies appear together, since they are not directly comparable.
+% Earlier exploratory runs used llama3.1:70B, llama2:7B and qwen-coder:14B. They are not in any
+% reported table; add a paragraph here if you want to include those numbers.
+
+\paragraph{Hardware.}
+All benchmark runs---the prompt ablation and the HeCBench part of the profile-data ablation---are
+generated and timed on an NVIDIA H100 PCIe (sm\_90). The application study and the real-application
+part of the profile-data ablation run on an NVIDIA GH200 (sm\_90). Both nodes use CUDA 12.6.3. One
+mismatch is worth stating: the profiles supplied in the prompt for the six original ablation benchmarks
+were collected on an A100 ($108$ SMs) rather than on the H100 ($114$ SMs) they were then timed on; the
+eleven profile-data-ablation benchmarks use native H100 profiles. All nodes are shared with other
+users, which motivates the measurement protocol of Section~\ref{sec:method}: build once, interleave
+variants within one session, wait for an idle GPU, and log competing GPU processes at the start and end
+of every repetition so that contaminated repetitions can be excluded rather than averaged in.

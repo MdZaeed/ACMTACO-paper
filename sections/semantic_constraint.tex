@@ -1,6 +1,6 @@
-Section~\ref{sec:analysis} motivates an explicit computational-intent constraint to prevent models
-from replacing the computation rather than optimizing it. We implemented that constraint and measured
-its effect directly.
+Section~\ref{sec:analysis} motivates an explicit computational-intent constraint to prevent models from
+replacing the computation rather than optimizing it. We implemented that constraint and measured its
+effect.
 
 \paragraph{Constraint text.}
 The prompt gains a \emph{semantic preservation} block stating that the model may change \emph{how} a
@@ -9,32 +9,51 @@ vectorization, unrolling, loop fusion/tiling/reordering, hoisting loop-invariant
 change \emph{what} is computed or how much work is done. In particular it may not reduce the number of
 algorithm-level operations by exploiting algebraic identities, change the iteration count of a timing,
 repeat or convergence loop, precompute at compile time a value the program computes at run time, skip
-work on the grounds that the program's own verification would still pass, or alter printed output.
+work on the grounds that the program's own verification would still pass, or alter printed output. A
+closing sentence names the case directly: if a benchmark exists to measure a specific hardware
+operation, that operation must still be performed the same number of times on the same volume of data.
 The rule is deliberately scoped to \emph{benchmark scaffolding}; eliminating genuine redundancy inside
 an application remains allowed, since that is the goal for real codes.
 
+\paragraph{The exploit.}
+\texttt{atomicSystemWide} exists to measure system-wide atomic throughput: each thread performs
+\texttt{loop\_num} system-scope \texttt{atomicAdd\_system(\&atom\_arr[0],\,10)} operations, and the
+program then checks the accumulated total. Without the constraint, both models removed the loop and
+kept the total. GPT-5 replaced it with one atomic per thread carrying the pre-summed value, annotating
+its own source \textit{``one store per warp is sufficient for postcondition used by verification'';}
+Gemini collapsed it further, to a single \texttt{atomicAdd\_system(\&atom\_arr[0], blockDim.x * 10 *
+loop\_num)} per block. Both versions print the same output and pass the program's own check.
+
 \paragraph{Effect.}
-Table~\ref{tab:intent} reports the \texttt{atomicSystemWide} benchmark, whose purpose is to measure
-system-wide atomic throughput. Without the constraint, both models delete the atomic loop the benchmark
-exists to measure and report three-order-of-magnitude ``speedups'' while output and the built-in
-verification are unchanged; GPT-5's own source comment reads \textit{``one store per warp is sufficient
-for postcondition used by verification.''} With the constraint, both return honest---and slightly
-negative---results. The two arms were generated and measured in the same session, differing only in the
-prompt text.
+Table~\ref{tab:intent} reports the outcome. Without the constraint, the two models report
+$1504\times$ and $2809\times$; with it, three separately generated constrained arms---the relaxed
+(\texttt{structural}) prompt and, in a later session, the \texttt{pcrl} and \texttt{code\_only} prompts
+that keep the original prohibitions---all return honest, roughly neutral results, and in all of them the
+per-iteration \texttt{atomicAdd\_system(\ldots,\,10)} is still present in the generated source. Two
+caveats apply to the table. The unconstrained and relaxed arms were generated and measured in the same
+interleaved session, but they differ in more than the constraint, since the relaxed prompt also lifts
+the syntactic prohibitions; the arms that isolate the constraint (original prohibitions plus the
+semantic-preservation block) come from a later session on a different node, where this benchmark's
+repetition spread exceeds $100\%$. The comparison we draw is therefore categorical---gaming versus no
+gaming, confirmed by reading the generated source---rather than a precise ratio.
 
 \begin{table}[t]
 \centering
 \footnotesize
+\setlength{\tabcolsep}{3pt}
 \caption{Effect of the semantic-preservation (computational-intent) constraint on
-  \texttt{atomicSystemWide}. Speedups are interleaved medians against the unmodified benchmark.
-  Apparent speedups are benchmark gaming: the measured operation is removed.}
+  \texttt{atomicSystemWide}. $^\dagger$ = benchmark gaming: the measured atomic loop is removed while
+  output and the built-in check are unchanged. The constrained arms all retain the per-iteration
+  atomic; their exact ratios are not comparable across sessions (see text).}
 \label{tab:intent}
-\begin{tabular}{@{}lrr@{}}
+\begin{tabular}{@{}lrrr@{}}
 \toprule
-\textbf{Model} & \textbf{Without constraint} & \textbf{With constraint} \\
+ & \textbf{No} & \multicolumn{2}{c}{\textbf{With constraint}} \\
+\cmidrule(lr){3-4}
+\textbf{Model} & \textbf{constraint} & \textbf{orig.\ rules} & \textbf{relaxed} \\
 \midrule
-GPT-5              & 1504$\times^\dagger$ & 0.94$\times$ \\
-Gemini 3.1 Pro     & 2809$\times^\dagger$ & 0.71$\times$ \\
+GPT-5          & 1504$\times^\dagger$ & 1.02$\times$ & 0.94$\times$ \\
+Gemini 3.1 Pro & 2809$\times^\dagger$ & 0.90$\times$ & 0.71$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}

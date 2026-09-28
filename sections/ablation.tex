@@ -1,67 +1,65 @@
-trying out 7 variations.
-no proof: does not asks for mathetical consistency and proof
-no constraints: removing all avoidance instruction of harmful optimization
-minimal: just asking for optimized version in one sentence nothing else
-no explanation: removes the need for explanation
-no format: removes the instruction for structured output
-no hardware: removes all the hardware specific guardrails
-cot: adding a "think step by step about bottlenecks before writing code" in the instructions
-
-We evaluate seven prompt variants, each removing or modifying a single component of the full prompt,
-to isolate the contribution of individual design choices to optimization quality and reliability.
+The full prompt is not a monolith: it bundles a persona, hardware-specific guardrails, a set of
+prohibitions, a formal-equivalence requirement, a request for an explanation of each change, and an
+output-format specification. To find out which of these actually matter, we evaluate six variants, each
+of which removes or adds exactly one component while leaving the source code and the profiling data
+in place. Two further variants (\texttt{no\_format}, \texttt{no\_hardware}) are implemented but excluded
+from the measured grid, for the reasons noted below.
 
 \paragraph{No Proof (\texttt{no\_proof}).}
-The full prompt requires the model to provide a formal justification that the optimized kernel is
-semantically equivalent to the original. Removing this requirement allows the model to apply
-transformations without verifying correctness. This is consequential: on \texttt{shmembench},
-the swap loop preserves an algebraic sum invariant, and without the proof requirement Gemini~2.5~Pro
-exploits this to eliminate all shared memory operations entirely, producing a 213$\times$ apparent
-speedup that does not reflect genuine hardware improvement. GPT-5 applies this transformation
-regardless of variant.
+The full prompt requires the model to state preconditions, postconditions and loop invariants, and to
+argue that the optimized kernel is semantically equivalent to the original. Removing this requirement
+lets the model apply a transformation without having to justify it. The consequence is visible on
+\texttt{shmembench}, whose swap loop preserves an algebraic sum invariant: without the proof
+requirement, Gemini~2.5~Pro exploits that invariant to eliminate shared-memory traffic altogether and
+reports a $213\times$ apparent speedup that reflects no hardware improvement. GPT-5 applies the same
+transformation under every variant, including the full prompt---which is what motivates the explicit
+semantic-preservation constraint of Section~\ref{sec:intent}.
 
 \paragraph{No Constraints (\texttt{no\_constraints}).}
-The full prompt includes explicit avoidance instructions, such as prohibitions against kernel fusion,
-entry-point renaming, and modifications that sacrifice correctness for speed. Removing these
-instructions gives the model unconstrained freedom to restructure the code. This can expose
-creative optimizations that the constraints would otherwise suppress, but also risks producing
-semantically incorrect or benchmark-invalidating optimizations.
+The full prompt carries a numbered list of prohibitions: do not rename or remove the entry point, do
+not change kernel signatures, do not introduce new top-level symbols, do not trade correctness for
+speed. This variant deletes every such line, giving the model unconstrained freedom to restructure.
+The effect is model-dependent rather than uniformly good or bad: it produces GPT-5's best
+\texttt{bitonic-sort} result ($1.14\times$) and one of Gemini's worst ($0.90\times$).
 
 \paragraph{Minimal (\texttt{minimal}).}
-Rather than providing profiling context, roofline data, and structured instructions, this variant
-reduces the prompt to a single sentence: \textit{``Optimize this CUDA kernel.''}
-The model receives the kernel source with no information about where bottlenecks occur.
-Without this context, the model must guess the optimization target, which frequently results
-in degraded performance. On \texttt{md5hash}, GPT-5 under \texttt{minimal} produced code
-51\% slower than the best-performing variant, consistent with optimizing the wrong bottleneck.
+This variant replaces the entire instruction block---persona, guardrails, prohibitions, proof
+requirement, explanation requirement and format specification---with a single sentence:
+\textit{``Optimize the following CUDA code for execution time.''} The source code and the profiling
+summaries are still supplied, so \texttt{minimal} isolates the value of the \emph{instructions} rather
+than of the evidence; removing the evidence instead is the separate ablation of
+Section~\ref{sec:profabl}. \texttt{Minimal} is the only variant that degrades both models: on
+\texttt{md5hash} GPT-5 produces code $51\%$ slower than its best variant, and on \texttt{shmembench}
+Gemini produces code roughly four times slower than under any other variant.
 
 \paragraph{No Explanation (\texttt{no\_explanation}).}
-The full prompt asks the model to accompany its code with a natural-language explanation of
-each change and its rationale. Removing this requirement eliminates a form of implicit
-chain-of-thought: articulating a justification encourages careful reasoning before committing
-to a transformation. Without it, the model skips this reasoning step and proceeds directly
-to code generation, which can increase the rate of subtle errors.
+The full prompt asks the model to return, alongside the code, a structured list of the optimizations it
+applied and those it considered and rejected. Dropping these blocks removes a form of implicit
+chain-of-thought: having to name and justify each change encourages the model to commit only to changes
+it can defend. Its measured effect is small and inconsistent---it is Gemini's best
+\texttt{bitonic-sort} variant ($1.13\times$) and has no discernible effect elsewhere---but it also
+removes the record from which we reconstruct \emph{why} a run behaved as it did.
 
-\paragraph{No Format (\texttt{no\_format}).}
-The full prompt specifies a structured output format: optimized code in a fenced code block,
-followed by a bulleted list of changes. Removing this specification causes the model to produce
-free-form output, which may intermix explanation with code, embed code in prose, or omit
-fenced delimiters entirely. This primarily affects the reliability of automated code extraction
-rather than the quality of the optimization itself.
-
-\paragraph{No Hardware (\texttt{no\_hardware}).}
-The full prompt includes hardware-specific guardrails, such as the target compute capability,
-shared memory limits per block, and a list of warp-level primitives unavailable on the target
-architecture. Without these constraints, the model may generate code that is valid in principle
-but incompatible with the deployment target. This is the primary cause of Gemini's compile
-failures on \texttt{sobol} under \texttt{cot}: the model introduced \texttt{\_\_builtin\_ctz},
-a host-only intrinsic, inside a \texttt{\_\_global\_\_} kernel, and could not correct the error
-across three repair iterations.
+\paragraph{No Role (\texttt{no\_role}).}
+The full prompt opens by casting the model as an HPC performance-optimization expert targeting a
+specific GPU, and follows with an architecture-specific guidance block. This variant removes both.
+It is the variant most likely to produce a pathological run rather than a merely worse one: GPT-5 under
+\texttt{no\_role} is the single timeout in the grid (\texttt{accuracy}), while Gemini completes the same
+configuration without incident.
 
 \paragraph{Chain-of-Thought (\texttt{cot}).}
-Unlike the other variants, \texttt{cot} adds rather than removes a prompt component.
-A single instruction is prepended: \textit{``Think step by step about the performance bottlenecks
-before writing any code.''}
-This encourages the model to reason explicitly about profiling evidence prior to generating
-the optimized kernel. Across both models and most benchmarks, \texttt{cot} is the most
-consistently stable variant, producing results at or near the best observed performance with
-no additional repair iterations relative to the full prompt.
+Unlike the others, \texttt{cot} adds a component rather than removing one: a single instruction,
+\textit{``Think step by step about which bottlenecks to address before writing any code,''} is
+prepended to the instruction block. It is the only variant that never degrades either model relative to
+the full prompt, reaching the best observed speedup for both on \texttt{bitonic-sort}
+($1.14\times$ and $1.13\times$). It is not uniformly safe, however: Gemini's \texttt{sobol} run under
+\texttt{cot} introduced \texttt{\_\_builtin\_ctz}---a host-only intrinsic---inside a
+\texttt{\_\_global\_\_} kernel and could not repair the resulting compile error within three iterations.
+
+\paragraph{Variants not evaluated.}
+\texttt{no\_format} strips the output-format specification and asks only for optimized code. We exclude
+it because it perturbs the reliability of automated code extraction rather than the quality of the
+optimization, which would confound the metric we are measuring rather than inform it.
+\texttt{no\_hardware} removes the architecture-specific guidance block and the target-architecture line;
+its effect is largely subsumed by \texttt{no\_role}, which removes the same guidance block together with
+the persona.

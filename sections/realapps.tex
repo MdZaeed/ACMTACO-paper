@@ -14,13 +14,14 @@ pipeline that single file to optimize, exactly as for a benchmark.
 \footnotesize
 \caption{Real applications, optimization targets, and the share of GPU time held by the target kernel.}
 \label{tab:apps}
+\setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}llr@{}}
 \toprule
 \textbf{Application} & \textbf{Target file (hot kernel)} & \textbf{Share} \\
 \midrule
 AutoDock-GPU & \texttt{calcMergeEneGra.cu} & 98.7\% \\
 LAMMPS (Kokkos) & \texttt{pair\_eam\_kokkos.cpp} & 62--68\% \\
-Cholla & \texttt{hllc\_cuda.cu} (HLLC solver) & 56.0\% \\
+Cholla & \texttt{hllc\_cuda.cu} & 56.0\% \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -61,8 +62,9 @@ is an expert reference restricted to the same single file.
 \centering
 \footnotesize
 \caption{Real-application speedups (interleaved medians, idle GPU, all gated correct).
-  $^\ddagger$ withdrawn: see Section~\ref{sec:realapps}. ``---'' = not run.}
+  ``---'' = not run; ``fail'' = no candidate passed the gate within three repair iterations.}
 \label{tab:realapps}
+\setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}llrrr@{}}
 \toprule
 \textbf{Application} & \textbf{Arm} & \textbf{GPT-5} & \textbf{Gemini} & \textbf{Hand} \\
@@ -88,8 +90,9 @@ replace 18 double-precision divisions by 6 reciprocal multiplications, and GPT-5
 integer index arithmetic used only for a bounds check, reducing register pressure from 109 to 89
 registers per thread without spilling. On AutoDock-GPU, by contrast, the profitable change is a
 cross-cutting restructuring---fusing seven sequential block reductions, each with three barriers and a
-shared-memory atomic, into one pass---worth $1.532\times$ by hand. \emph{All four} model outputs
-(two models $\times$ two prompts) left all seven reductions in place and gained at most $3.7\%$.
+shared-memory atomic, into one pass---worth $1.532\times$ by hand. \emph{Every} candidate that built---three
+of the four model~$\times$~prompt cells, the fourth producing none---left all seven reductions in place
+and gained at most $3.7\%$.
 
 \paragraph{The structural prompt never helped and broke real builds.}
 Its contract was written for single-file benchmarks: it permits signature changes and states that the
@@ -119,3 +122,55 @@ loop time (integration and ghost-atom exchange stay on the CPU), capping any ker
 at ${\sim}8\%$ by Amdahl's law. We switched to the Kokkos backend, where the whole timestep runs on the
 GPU ($94\%$ GPU-busy), before evaluating. A kernel can be $99\%$ of GPU time and still a small fraction
 of the application.
+
+\subsection{Prompt-fidelity defects exposed by real code}
+\label{sec:defects}
+Running production applications through the loop surfaced a class of problem that benchmark runs had
+hidden for months: the prompt the model actually received was not the prompt we believed we were
+sending. Table~\ref{tab:defects} lists the defects we found and fixed. They fall into two groups.
+\emph{Summarization} defects corrupt the profiling evidence---a shared-memory footprint of
+$7.43$\,Kbyte presented to the model as ``7 bytes'', SI \texttt{Kbyte} read as $1024$ bytes, and, most
+seriously, a CSV reader that parsed every section of an Nsight Compute source page against the first
+section's header and silently dropped rows of any other width. On one benchmark that left $36$ of $76$
+stall rows in the prompt; re-running $56$ profiled inputs after the fix changed four of them, all by
+\emph{gaining} rows. \emph{Loop} defects corrupt the repair channel: a build timeout reported to the
+model as a fault in its own code, and an error filter that kept only lines matching
+\texttt{error}$|$\texttt{fatal}$|$\texttt{undefined reference}, so that a linker's explanatory line
+(\texttt{multiple definition of \ldots first defined here}) was discarded and the model saw only
+\texttt{ld returned 1 exit status}.
+
+One defect deserves separate mention because it is a design decision rather than an oversight. The
+pipeline strips all comments from the source before prompting, to save tokens, and then replaces the
+original file with the model's full-file answer---so every optimized file lost its license header and
+all of its documentation. We initially, and wrongly, attributed the missing LGPL and GPL headers to the
+models; the prompts contained no occurrence of ``Copyright''. We now re-attach the original leading
+comment block when it is a license and the candidate lacks it, but the general question stands: comment
+stripping also discards institutional knowledge such as \texttt{// DO NOT UNDEFINE} directives that
+exist precisely to stop the edit an optimizer is about to make.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Prompt-fidelity defects found while running production applications, and what each one
+  corrupted. All were present during the benchmark study.}
+\label{tab:defects}
+\begin{tabular}{@{}p{0.30\columnwidth}p{0.63\columnwidth}@{}}
+\toprule
+\textbf{Defect} & \textbf{Effect} \\
+\midrule
+Shared memory read without unit & $7.43$\,Kbyte/block shown as ``7 bytes''; static and dynamic sizes
+  summed across units \\
+\texttt{Kbyte} treated as $1024$\,B & $2.4\%$ error in every stated size \\
+Per-section CSV headers ignored & $25$ of $26$ sections dropped on one input ($36/76$ stall rows
+  reached the model) \\
+Stall reasons from a Python \texttt{set} & Prompt text not reproducible across processes \\
+Kernel names matched verbatim & Namespaced and templated kernels fell back to the capped launch count
+  ($9$ instead of $49$) \\
+Comments stripped before prompting & Optimized files lost their license header and all documentation \\
+Echoed line numbers not stripped & Uncompilable output; one wasted repair iteration \\
+Fixed $300$\,s build timeout & Real-application rebuilds reported to the model as its own fault \\
+Linker cause lines filtered out & Repair prompt contained no actionable error \\
+\bottomrule
+\end{tabular}
+\end{table}

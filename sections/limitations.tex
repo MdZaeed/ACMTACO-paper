@@ -5,22 +5,25 @@ GPU processes at the start and end of every repetition, and report medians over 
 Two complete timing passes were discarded because other users' jobs occupied the GPU. Even so,
 detection is imperfect: in one Cholla pass three repetitions drifted by $15\%$ while our detector
 reported no foreign GPU process, so we additionally require repetitions to agree before using them.
-Residual interference cannot be excluded on a shared machine, and small effects
-($\lesssim 2\%$) should not be read as real.
+Residual interference cannot be excluded on a shared machine: measurement noise alone puts a floor of
+roughly $2\%$ under any effect we report on the applications, and far higher on the noisiest benchmarks,
+where per-repetition spread exceeds $100\%$.
 
 \paragraph{Sampling of model outputs.}
 Except where stated, each (application, model, prompt) cell is a \emph{single} LLM sample. Language
 model outputs vary between calls, so a single cell conflates prompt effect with sampling variance. We
 replicated two settings---a second independent generation round for the structural/diagnostic arms, and
 a second profile-data sample for the real applications---and the direction of the effect was stable
-there, but the per-cell numbers in Section~\ref{sec:results} carry no confidence interval. Effects
-below roughly $5\%$ should be treated as unresolved.
+there, but the per-cell numbers in Section~\ref{sec:results} carry no confidence interval. Combined
+with the measurement floor above, this means an effect below roughly $5\%$ in a single cell should be
+treated as unresolved rather than small.
 
 \paragraph{Hardware and software scope.}
-Results cover NVIDIA GPUs only: A100 (sm\_80) for the prompt ablation, GH200 and H100 PCIe (sm\_90) for
-the real applications, with CUDA 12.6.3. Conclusions may not transfer across architectures: a
-diagnostics-prompt gain of $1.37\times$ on \texttt{bincount} measured on GH200 did not reproduce on the
-H100 ($0.99\times$). We use two proprietary models whose weights and versions we do not control; the
+Results cover NVIDIA GPUs only: H100 PCIe (sm\_90) for the benchmark studies and GH200 (sm\_90) for
+the applications, with CUDA 12.6.3. Conclusions may not transfer across architectures, and we did not test that
+directly: every prompt variant was evaluated on one architecture per study, so an effect that depends
+on register file size, SM count or cache hierarchy would be invisible to us. The profiles supplied for
+the six original ablation benchmarks were themselves collected on an A100 and used on an H100. We use two proprietary models whose weights and versions we do not control; the
 same prompt may behave differently after a model update.
 
 \paragraph{Correctness gates are empirical, not proofs.}
@@ -49,22 +52,37 @@ and kernel-signature changes that broke linkage against ten call sites). Some op
 would make are out of reach by construction.
 
 \paragraph{Tooling defects discovered during the study.}
-Several defects in our own summarizers were found while running the real applications, and earlier
-prompts were generated with them: shared-memory sizes were reported without their unit (a kernel using
-$7.43$\,Kbyte appeared as ``7 bytes''); a PC-sampling parser dropped rows whose section header differed,
-truncating the stall data for three benchmarks (for \texttt{xsbench}, 36 of 76 rows survived); true
-kernel launch counts never matched namespaced or templated kernel names, so aggregate cost was
-understated; comment stripping removed license headers from every generated file; and the build timeout
-was reported to the model as a fault in its own code. These are fixed, but results predating the fixes
-were produced with the affected prompts and would need regeneration to be strictly comparable.
+The prompt-fidelity defects of Section~\ref{sec:defects} (Table~\ref{tab:defects}) were all present
+during the benchmark study: profiling summaries reached the model with wrong units, truncated
+stall data and understated launch counts, and the repair channel discarded the diagnostics a model
+needed. They are fixed, but every result predating a given fix was produced with the affected prompt
+and would need regeneration to be strictly comparable. We report the benchmark numbers as measured
+rather than re-running the grid, and we do not claim that the ablation of Section~\ref{sec:ablation}
+would reproduce unchanged on the corrected summarizers.
 
 \paragraph{Coverage of the profile-data ablation.}
-The comparison in Section~\ref{sec:profabl} covers 26 (application, model) pairs, of which two
+The comparison in Section~\ref{sec:profabl} spans 26 (application, model) pairs but scores 21. Two
 benchmarks (\texttt{boxfilter}, \texttt{ccsd-trpdrv}) could not be timed on the available node because
-the \emph{unmodified} applications exceed our per-run cap, and two others (\texttt{adv},
-\texttt{background-subtract}) fail their own built-in check in the unmodified state on that node, so
-their gate carries no information there. The remaining denominator is small, and the positive result
-rests on one application (Cholla) with two models.
+the \emph{unmodified} programs exceed our $600$\,s per-run cap, costing four pairs, and
+\texttt{background-subtract} under GPT-5 yields no \texttt{code\_only} candidate at all. The
+denominator is therefore small, and---more importantly---the entire positive result rests on a single
+application, Cholla, with two models. The seventeen benchmark pairs establish only that the effect is
+absent there, not that it generalizes to other large applications.
+
+\paragraph{Benchmark verification was unusable as a gate on that node.}
+For the HeCBench part of the profile-data ablation, not one of the nine measured benchmarks gave a
+usable verdict for the \emph{unmodified} program on the H100 node: five (\texttt{adv},
+\texttt{background-subtract}, \texttt{chemv}, \texttt{concat}, \texttt{convolutionSeparable}) print FAIL
+from their own built-in check, and the other four print no verdict at all. In \texttt{chemv} the cause
+is structural rather than numerical: its timing loop launches the two kernels $1000$ times accumulating
+into the same output buffer without re-initializing it, then compares the result against a single
+application of the CPU reference, so the check cannot pass for the unmodified program. A candidate's verdict is therefore informative only where it differs from
+the pristine one, as on \texttt{atomicSystemWide}, where the unmodified program is silent and the
+\texttt{code\_only} candidate reports FAIL. Correctness for the rest rests on the pipeline's
+generation-time check and on our inspection of the diffs, which is weaker than the gates we built for
+the applications. It is also a caution about the benchmark suites these systems are usually evaluated
+on: a built-in PASS/FAIL is not automatically a correctness oracle on hardware the benchmark was not
+tuned for.
 
 \paragraph{Scope of the objective.}
 We optimize execution time of a single GPU kernel file under a correctness gate. We do not study

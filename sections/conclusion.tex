@@ -1,0 +1,31 @@
+We studied prompt design for LLM-driven GPU code optimization inside a closed loop that profiles,
+generates, builds, verifies and measures, and we pushed that loop past single-kernel benchmarks onto
+three production scientific applications.
+
+Three results stand out. First, guardrails decide what the models do with the freedom they are given.
+Removing context degrades every model we tested, while an explicit semantic-preservation constraint is
+what separates an honest result from a benchmark-gaming one: without it, both models delete the
+computation a benchmark exists to measure and report speedups of three orders of magnitude that survive
+the benchmark's own correctness check. Second, profiling data earns its place in the prompt in
+proportion to how hard the bottleneck is to see from the source. It is worth nothing measurable on
+single-kernel benchmarks, where the hot loop is obvious, and $7.7$--$11.5\%$ on a 21k-line application
+where it is not. Third, and most consequential for anyone building such a system, the models reliably
+find local, exact transformations---reciprocal reuse, removing redundant index arithmetic, read-only
+loads---and reliably miss cross-cutting restructuring: on AutoDock-GPU every candidate we obtained left in
+place the seven sequential block reductions whose fusion is worth $1.532\times$ by hand, while on Cholla the best model output ($1.571\times$) beat our hand-tuned reference.
+
+The failures were as informative as the speedups. Editing a single file inside a real program means the
+model cannot see how that file is compiled, and three of our application failures follow directly:
+symbols redefined because the file is textually included elsewhere, and kernel signatures changed
+although ten call sites in other translation units depend on them. Applications also swallow the
+diagnostics a repair loop needs---one aborts with a bare assertion, discarding the CUDA error that
+explained the bug---and shared machines silently corrupt measurements unless contention is detected per
+repetition. None of these appear when optimizing self-contained benchmark kernels, which is precisely
+why benchmark-only evaluation overstates how ready such systems are.
+
+Two directions follow. The prompt should carry the file's \emph{compilation context}---whether it is a
+standalone translation unit, which symbols are already in scope, and which declarations other files
+depend on---since that is cheap to extract and addresses the dominant real-code failure mode. And the
+structural freedom that helps on standalone kernels needs a real-application contract that forbids
+changing externally visible signatures while still allowing file-internal restructuring; in its current
+form it never outperformed the constrained prompt and repeatedly broke builds.

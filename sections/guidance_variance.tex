@@ -1,0 +1,75 @@
+Sections~\ref{sec:ablation} and \ref{sec:profabl} treat profiling data as something the prompt either
+carries or does not. A third option is to carry it \emph{interpreted}: to convert the metrics into
+named remedies before the model sees them. Recent work argues strongly for this---KernelPro turns
+Nsight Compute, SASS and Nsight Systems output into natural-language guidance through a set of
+micro-profiling tools, and reports a $125\%$ higher speedup than handing the model raw metrics
+\cite{gai2026kernelpro}. We evaluated the same idea, as a \texttt{diagnostics} prompt that adds a
+bounded checklist of measured conditions and the transformation each one suggests, and reach a more
+qualified conclusion: interpretation does not shift the average outcome so much as it widens the
+distribution of outcomes.
+
+\paragraph{Setup.}
+Table~\ref{tab:guidvar} reports four arms on one node (GH200, idle, all arms built once and timed
+round-robin in a single session): the unmodified program, the constrained \emph{baseline} prompt, the
+relaxed \emph{structural} prompt, and \emph{diagnostics}, which is the structural prompt plus the
+checklist. These are the tightest measurements in this paper---most repetition spreads are below $5\%$
+and several are below $0.1\%$---so the differences below are not measurement artifacts.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{2pt}
+\caption{Effect of converting profiling metrics into a prescriptive checklist (\emph{diag}), against
+  the constrained (\emph{base}) and relaxed (\emph{struct}) prompts. Speedups are interleaved medians
+  against the unmodified program on one GH200. \textbf{Bold} marks the cases discussed in the text.
+  ``spread'' is the largest repetition spread across the four arms.}
+\label{tab:guidvar}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+\textbf{Benchmark} & \textbf{Model} & \textbf{base} & \textbf{struct} & \textbf{diag} & \textbf{spread} \\
+\midrule
+\texttt{chemv}                & Gemini & \textbf{7.835}$\times$ & 7.638$\times$ & \textbf{1.075}$\times$ & 1.9\% \\
+\texttt{concat}               & GPT-5  & 1.031$\times$ & 0.838$\times$ & \textbf{0.349}$\times$ & 0.1\% \\
+\texttt{boxfilter}            & GPT-5  & \textbf{10.280}$\times$ & 6.352$\times$ & 5.503$\times$ & 0.0\% \\
+\midrule
+\texttt{bincount}             & GPT-5  & 1.035$\times$ & 1.037$\times$ & \textbf{1.374}$\times$ & 5.2\% \\
+\texttt{bincount}             & Gemini & 1.106$\times$ & 1.003$\times$ & \textbf{1.380}$\times$ & 4.4\% \\
+\texttt{concat}               & Gemini & 1.001$\times$ & 1.797$\times$ & \textbf{1.798}$\times$ & 46.8\% \\
+\texttt{boxfilter}            & Gemini & 8.691$\times$ & 8.930$\times$ & 9.371$\times$ & 42.6\% \\
+\texttt{convolutionSeparable} & Gemini & 1.418$\times$ & 1.499$\times$ & 1.514$\times$ & 19.3\% \\
+\midrule
+\texttt{blockAccess}          & both   & $\approx 1.00\times$ & $\approx 1.00\times$ & $\approx 1.00\times$ & 0.2\% \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\paragraph{The checklist produces our largest gains.}
+On \texttt{bincount} it takes both models from roughly $1.04$--$1.11\times$ to $1.37$--$1.38\times$,
+approaching our hand-tuned reference ($1.392\times$), and on \texttt{concat} under Gemini it is the
+difference between no speedup and $1.80\times$. Where the measured condition is real and the named
+remedy is the right one, telling the model what to do works.
+
+\paragraph{It also produces our largest losses, on the same benchmarks.}
+On \texttt{chemv} the unaided model had restructured the polyhedral-generated kernel into two
+row-parallel kernels---one per triangle half, conjugation preserved on the upper one---a genuine
+algorithmic rewrite worth $7.835\times$. Given the checklist, it kept the original loop nest and bolted
+on the shared-memory staging the checklist named, collapsing to $1.075\times$. On \texttt{concat},
+GPT-5 followed the instruction to process several elements per thread literally, to
+one-thread-per-128-element line: a $128\times$ collapse in parallelism, measured at $0.349\times$ with a
+$0.1\%$ spread. On \texttt{boxfilter} the same prompt costs GPT-5 nearly half of a $10.280\times$ result.
+
+\paragraph{Interpretation narrows the search.}
+A checklist of remedies is an anchor as much as a hint. When the listed transformation is the best
+available one, anchoring is worth a large factor; when the model would have found something better
+unaided, the anchor is what it finds instead. Averaged over our benchmarks the effect is close to
+neutral, which is why a mean speedup---the statistic the literature reports---hides it. The dispersion
+is the result: the same prompt component that produces $1.380\times$ on one benchmark produces
+$0.349\times$ on another, both at sub-$5\%$ spread.
+
+Two practical consequences follow. First, prescriptive guidance should be reported with its variance,
+not only its mean; we would not have seen this in a geometric-mean summary. Second, the guidance should
+be \emph{evidence rather than remedy}---state the measured condition (``$23\%$ occupancy, limited by
+109 registers per thread'') and let the model decide what follows, instead of naming the
+transformation. We did not get to test that variant, and it is the first thing we would run next.

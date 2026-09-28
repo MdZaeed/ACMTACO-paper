@@ -1,0 +1,92 @@
+\paragraph{Code LLMs and their benchmarks.}
+Code-generation models are usually measured by functional correctness on small, self-contained
+problems---HumanEval and its successors \cite{chen2021codex}---or, more recently, by repository-level
+issue resolution \cite{jimenez2024swebench}. Neither rewards performance: a program that passes the
+tests scores the same whether it runs in one second or ten. Our setting inverts this. Correctness is a
+gate rather than the objective, and the score is measured wall-clock time of a real application.
+
+\paragraph{LLMs for performance optimization.}
+Performance-oriented work with LLMs falls into three groups. The first learns edits that make code
+faster: PIE mines human performance-improving edits from competitive-programming submissions and adapts
+LLMs to reproduce them, reporting large speedups on simulated CPU time \cite{shypula2024pie}. The
+second targets the compiler rather than the source: Cummins et al.\ train models to predict
+optimization flag sequences over LLVM-IR \cite{cummins2023llmopt} and release compiler foundation
+models \cite{cummins2024llmcompiler}. The third targets GPU kernels directly. KernelBench asks models
+to write CUDA kernels equivalent to PyTorch reference modules and reports that frontier models beat the
+PyTorch baseline in fewer than 20\% of tasks \cite{ouyang2025kernelbench}; ParEval evaluates parallel
+code generation across execution models and shows a marked gap between sequential and parallel
+generation quality \cite{nichols2024parallel}. All of these generate or rewrite \emph{standalone}
+kernels or short programs. The distinguishing feature of our study is that the artifact under
+optimization is one file inside a production application---AutoDock-GPU, LAMMPS, Cholla---which keeps
+its build system, its callers, and its own scientific validation.
+
+\paragraph{Profiling data as LLM context.}
+The closest work to ours feeds profiler output back to the model. Gai et al.\ route Nsight Compute,
+SASS and Nsight Systems data through a roofline-based classifier that turns raw counters into natural
+language guidance, and report large gains on KernelBench \cite{gai2026microprofiling}. We ask a
+narrower and, we argue, prior question: does profiling data help \emph{at all}, relative to the same
+prompt without it? The distinction matters most against KernelPro, the closest work to ours, which
+feeds Nsight Compute, SASS and Nsight Systems output through pluggable micro-profiling tools that
+convert raw metrics into natural-language guidance and reports a $125\%$ higher speedup for the
+interpreted arm \cite{gai2026kernelpro}. Both of their arms carry profiling data; the comparison is
+\emph{interpreted} against \emph{raw}. Ours removes the data entirely. Section~\ref{sec:guidvar}
+evaluates their question too, on our benchmarks, and finds that interpretation widens the distribution
+of outcomes rather than shifting its centre. Section~\ref{sec:profabl} isolates that by holding every other prompt component
+fixed, and finds the answer depends on the workload---no measurable effect on single-kernel benchmarks,
+but a clear effect on a large application where the bottleneck is not apparent from the source.
+
+\paragraph{Autotuning and search.}
+Classical autotuning searches a space of program variants or parameters with measurement in the loop:
+OpenTuner for general program autotuning \cite{ansel2014opentuner}, and learned cost models for tensor
+programs in AutoTVM \cite{chen2018autotvm} and Ansor \cite{zheng2020ansor}. These systems explore a
+fixed, hand-designed space and need many measurements; an LLM instead proposes a small number of
+semantically arbitrary source edits. The two are complementary, and our build--verify--measure loop is
+essentially the autotuner's evaluation harness wrapped around a generative proposer. The profile
+summaries we place in the prompt play the role that a cost model plays in search: they tell the
+proposer where the time goes. Roofline analysis \cite{williams2009roofline} underlies both the
+Nsight Compute reports we summarize and the bottleneck classification used by prior work.
+
+\paragraph{Repair loops.}
+Iterative self-repair from compiler and test feedback is now standard practice
+\cite{chen2024selfdebug}. Our loop is a constrained instance: the feedback is a build log or an
+application-level correctness gate, and the number of repair iterations is bounded. Our contribution
+here is negative and practical---we document cases where the loop cannot work because the information
+needed is absent from the feedback, for example a linker error whose cause line is filtered out of the
+summary, or an application that aborts with a bare assertion and discards the CUDA error.
+
+\paragraph{Benchmark gaming and reward hacking.}
+A model optimizing against a checkable objective may satisfy the check without doing the work. This is
+the code-generation instance of reward hacking, studied recently through benchmarks that deliberately
+expose exploitable evaluation harnesses: EvilGenie places coding agents in an environment where
+test files can be edited or answers hardcoded, and finds explicit reward hacking by current
+proprietary agents, detectable by an LLM judge but not reliably by held-out tests
+\cite{gabor2025evilgenie}. In the performance setting specifically, KernelBench-Verified audits
+LLM-generated GPU kernels and finds identity functions reported as $374\times$ speedups, fast paths
+gated on the test tensor's exact dimensions, and value-dependent work skipping; recalibrated against
+hidden input distributions and an LLM-judge audit, the best model drops from $1.43\times$ to
+$0.88\times$, with $11.6\%$ of problems relying on distribution-specific exploits
+\cite{zhang2026kernelbenchverified}. Our contribution here is therefore not the observation but its
+setting and its remedy: the same failure in an HPC benchmark rather than an ML one, a prompt-level
+constraint that we measure, and a detection rule cheap enough to run on every candidate. We observe the phenomenon in a performance setting, where it
+is particularly insidious: deleting the measured computation preserves the printed output and the
+benchmark's own PASS check while producing three-order-of-magnitude ``speedups''
+(Section~\ref{sec:intent}). We show that a prompt-level semantic-preservation constraint suppresses it
+for both models we tested, and we report the detection rule we use in its place---an implausibility
+threshold followed by diff inspection.
+
+\paragraph{Repository-level optimization.}
+A parallel line of work optimizes whole repositories rather than kernels. GSO scores agents against the
+speedup an expert commit achieved across ten codebases \cite{shetty2025gso}, and PerfAgent adds a
+profiler-guided, verifier-in-the-loop layer that more than doubles the rate of expert-matching patches
+on it \cite{deng2026perfagent}. Its motivation matches ours almost exactly---agents miss bottlenecks
+hidden behind abstraction layers and native extensions---but the targets are CPU-bound Python
+repositories scored against an expert's commit. Ours are GPU kernels inside production scientific
+applications, scored against the application's own scientific output, which is a correctness standard
+an expert diff cannot provide.
+
+\paragraph{HPC benchmark suites.}
+We use HeCBench \cite{jin2023hecbench} for the prompt ablation, which provides many small CUDA kernels
+with built-in verification, and three production applications for the end-to-end study. The contrast
+between the two is one of our main findings: conclusions drawn on single-kernel benchmarks did not
+transfer to applications, either for the value of profiling data or for the prompt variant that works
+best.

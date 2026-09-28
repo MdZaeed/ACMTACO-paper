@@ -1,2 +1,59 @@
-Profiling data collection and analysis, pc, roofline and importance analysis. prompt has 5 major regions, code, stats, machines specific guardrails, general pitfall avoidance guradrails and output format definition. The framework replaces the optimized code automatically to build and runs every version 10 times to get the runtime, The correctness check is done by 2 ways: if the baseline have numbers, the optimized ones produce same numbers and if the benchmark have in-built check, it uses that output (tailored for every application) to check correctness. 
-memory-bound (shmembench) and compute-bound (bitonic-sort, md5hash, atan2) workloads. 
+\subsection{Pipeline}
+The framework takes a source file, a build command and a run command, and closes the loop
+\emph{profile $\rightarrow$ prompt $\rightarrow$ generate $\rightarrow$ build $\rightarrow$ verify
+$\rightarrow$ measure}, with bounded repair. The optimized file returned by the model replaces the
+original in a private copy of the application tree, so the build, the callers and the input data are
+those of the real program. If the build or the correctness check fails, the error summary is appended
+to the prompt and the model is asked to repair; we allow three iterations before recording the run as
+a failure.
+
+\subsection{Profiling data}
+We profile with Nsight Compute in two passes: an uncapped pass over every launch that yields true
+launch counts and per-launch durations, and a capped \texttt{-{}-set full} pass that yields the detail
+pages. From the resulting reports we derive three kinds of prompt context:
+\begin{itemize}\itemsep2pt
+  \item \textbf{PC sampling} (\texttt{-{}-page source}): per-source-line warp stall reasons, which we
+    aggregate to the lines with the highest stall ratios.
+  \item \textbf{Roofline} (\texttt{-{}-page details}): per-kernel throughput relative to DRAM and compute
+    peaks, plus the analysis rules Nsight Compute reports.
+  \item \textbf{Importance analysis}: per-kernel aggregate cost (launch count $\times$ per-launch time)
+    used to rank which kernel is worth editing at all.
+\end{itemize}
+A capped profile is only representative if the launches it keeps are: in one application the first 200
+launches were setup rather than simulation, and we skip a measured number of launches before profiling
+(Section~\ref{sec:realapps}).
+
+\subsection{Prompt structure}
+The prompt has five regions: (i) the source file, (ii) the profile summaries above, (iii)
+hardware-specific guardrails (target architecture, shared-memory limits, unavailable intrinsics), (iv)
+general pitfall-avoidance guardrails (entry-point preservation, no signature changes, no new top-level
+symbols, semantic preservation), and (v) an output-format specification requiring a single fenced code
+block plus structured lists of applied and rejected optimizations. Section~\ref{sec:ablation} ablates
+these regions; Section~\ref{sec:profabl} removes region (ii) entirely.
+
+\subsection{Correctness}
+Correctness is checked in whichever of two ways the program supports. If the program prints numerical
+results, the optimized version must reproduce the baseline's numbers; if it ships a built-in
+verification, we use its verdict, tailored per application. For the production applications neither is
+sufficient on its own, so we construct explicit gates---bit-exact field comparison where the
+application is deterministic, and a statistical band where it is not---and validate each gate by
+injecting a deliberate fault and confirming the gate rejects it (Section~\ref{sec:realapps}).
+
+\subsection{Timing}
+Time comes from the program's own reported kernel or phase time wherever it provides one, and from wall
+clock otherwise; for the applications this matters, since AutoDock-GPU's CUDA setup alone is $68$\,s on
+a cold driver and would swamp a few percent of solver time. The number reported by the pipeline during
+a run is indicative only. Every number we report comes from a separate measurement pass that builds
+each arm once, discards a warmup run, interleaves all arms of an application round-robin within a
+single session, waits for an idle GPU before starting, and logs other users' GPU processes at the start
+\emph{and} the end of every repetition. We take medians over the repetitions that were clean by that
+test---seven repetitions per arm for the applications, five for the profile-data ablation on
+benchmarks---and treat repetitions that disagree with their neighbours as suspect even when no foreign
+process was seen. Between-session drift on these shared nodes reached $49\%$ on identical code, which
+is an order of magnitude larger than most of the effects we are trying to measure.
+
+\subsection{Workload selection}
+The benchmark study spans memory-bound (\texttt{shmembench}) and compute-bound (\texttt{bitonic-sort},
+\texttt{md5hash}, \texttt{atan2}) kernels. The application study selects, for each program, the single
+file containing the kernel that dominates GPU time, and---critically---only after confirming that this
+kernel also dominates \emph{application} time.
