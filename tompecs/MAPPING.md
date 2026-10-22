@@ -1,0 +1,107 @@
+# TOMPECS version: structure, provenance, and open items
+
+Branch `tompecs` of this repository; the original ACL-style paper is untouched on `main`
+(`sections/`, `sections/main.tex`). Everything new is in `tompecs/`.
+
+## What was verified about the venue, and how sure we are
+
+| fact | source | confidence |
+|---|---|---|
+| Use `acmart` with format `acmsmall`; the journal macro is `\acmJournal{TOMPECS}` | the acmart user guide (CTAN `acmguide.pdf`), Table 1 and the journal-abbreviation table | read directly |
+| Review copy: `\documentclass[acmsmall,review]{acmart}`; `anonymous` hides authors | same guide | read directly |
+| CCS concepts and keywords are required for articles over two pages | same guide | read directly |
+| Length limit: 30 pages in ACM Transactions style; badly formatted or over-length papers may be returned without review | a search result quoting the journal's author-guidelines page | **secondhand**: the ACM page itself returns 403 to automated fetch; confirm on the page |
+| Submission through Manuscript Central (`mc.manuscriptcentral.com/tompecs`); cover letter must explain fit with scope and any earlier versions or parallel submissions; ORCID required for submitting authors | same search result | **secondhand** |
+| Scope: modeling, analysis and performance evaluation of computing and communication systems; topics include measurement/instrumentation, statistical analysis, verification and validation, workload characterization | a 2014 launch announcement and listing pages | secondhand and old |
+| Whether review is single- or double-blind; whether references count toward the 30 pages; artifact policy | not found | **unknown** |
+
+## How the paper was restructured
+
+The ACL paper was a flat sequence of studies. TOMPECS is a performance-evaluation venue, so the
+manuscript is reorganised around the part of the work that is evaluation methodology: how to
+measure, validate and report an LLM-based optimizer's results credibly on shared hardware. The
+studies are unchanged; they are now grouped as answers to five research questions and the
+evaluation material that was scattered across Limitations, Analysis and Real Applications is
+gathered into Methodology, a Pitfalls section, and a Threats-to-Validity section.
+
+| new section | label | built from (old files) |
+|---|---|---|
+| 1 Introduction | `sec:intro` | `introduction` (verbatim) + **new**: five research questions, organization paragraph |
+| 2 Background and Related Work | `sec:relatedwork` | `relatedWork` (verbatim; moved earlier) |
+| 3 The Optimization Pipeline Under Study | `sec:subject` | `methodology`: Pipeline, Profiling data, Prompt structure |
+| 4 Experimental Methodology | `sec:method` | `experiments` (4.1) + `methodology`: Workload selection (4.2), Correctness (4.3), Timing (4.4) + **new** 4.5 Reporting Conventions |
+| 5 Prompt-Component Study | `sec:prompts` | `ablation` (5.1), `results` (5.2), `analysis`: Optimization quality, Prompt components, Reliability (5.3) |
+| 6 Benchmark Validity | `sec:intent` | `analysis`: Benchmark gaming (6.1) + `semantic_constraint` (6.2) |
+| 7 Production Applications | `sec:realapps` | `realapps` minus the defects subsection |
+| 8 The Value of Profiling Evidence | `sec:evidence` | `profile_ablation` (8.1), `guidance_variance` (8.2) |
+| 9 Evaluation Pitfalls in Practice | `sec:pitfalls` | **new** summary table + `realapps`: defects subsection + `analysis`: From benchmarks to applications |
+| 10 Threats to Validity and Limitations | `sec:limits` | `limitations`, regrouped under internal / statistical-conclusion / construct / external validity |
+| 11 Conclusion and Future Work | `sec:conclusions` | `conclusion` (verbatim) |
+
+All old labels are kept (`sec:ablation`, `sec:results`, `sec:analysis`, `sec:profabl`, `sec:guidvar`,
+`sec:defects`, `sec:explanation`, ...) on the matching new heading, so cross-references still resolve.
+
+## Everything that is not a verbatim move
+
+New text, all marked `% NEW` in the generated files, and containing no measurement or claim that is
+not already in the paper:
+
+1. the research-question paragraph and the "Organization" paragraph in the introduction;
+2. one- or two-sentence openers for Sections 3, 4, 5, 6, 8, 9, 10;
+3. Section 4.5 Reporting Conventions, which restates conventions already stated elsewhere
+   (medians over clean repetitions, speedups against the unmodified program, single-sample cells,
+   the 5% unresolved threshold, the tie rule, the 5x alarm);
+4. Table 9 (`tab:pitfalls`), a summary of pitfalls whose every row cites a finding made elsewhere.
+
+Edits to existing wording (marked `% EDIT`, plus heading renames):
+
+1. the first sentence of the semantic-constraint text. It said "Section analysis motivates an
+   explicit computational-intent constraint"; the gaming paragraph it pointed to now sits immediately
+   before it (Section 6.1), so it now reads "The gaming observed in the ablation (Section 6.1)
+   motivates ...";
+2. headings renamed to title case, and two `\paragraph` units promoted to `\subsection`
+   (Benchmark gaming; From benchmarks to applications);
+3. the intro's sentence "Within this loop we treat the prompt as the object of study. Our contributions
+   are:" is split by the new research-question paragraph.
+
+Duplication carried over from the original and left alone: the shared-node drift figures and the
+measurement protocol appear in Section 4.4, in Section 7 (Measurement) and in Section 10. A journal
+version would normally state them once and point to them.
+
+`tools/check.py` verifies the assembly: every \input exists, braces and environments balance, every
+`\ref` has a label, every citation is in the bibliography and the cited set equals the original's,
+no number of the original appears fewer times, and 889 of the original's 898 non-comment lines are
+carried over verbatim (the other 9 are exactly the edits listed above). **It does not replace
+compiling**: there is no LaTeX on the machine this was written on, so the manuscript has never been
+built.
+
+## To do before submission
+
+- **Compile it** (`latexmk -pdf main` or Overleaf with the `tompecs/` folder) and fix whatever the
+  first build reports. Expect to adjust the table widths: tables written for two-column ACL pages
+  now sit in a single column.
+- **Length.** About 11,200 words and nine tables, which in acmsmall is probably in the mid-twenties
+  of pages; this is an estimate. The venue limit is reported as 30 pages; whether references count
+  is unknown.
+- Fill in authors, affiliations, ORCIDs, acknowledgments, and the Data and Artifact Availability
+  statement. The last is a heading only; nothing about availability is claimed.
+- **Regenerate the CCS concepts** with the ACM tool. The identifiers in `main.tex` were written from
+  memory and are not verified.
+- Confirm single- versus double-blind review; if double-blind, add the `anonymous` option.
+- Write the cover letter the journal asks for (fit with scope; any earlier version of this material;
+  parallel submissions).
+
+## Where the fit with TOMPECS is thinner, for the authors to decide
+
+- TOMPECS is about modeling and performance evaluation. This paper is an empirical evaluation study
+  with a strong methodology thread but **no analytic or statistical model of its own**. The
+  framing here leans on the methodology thread; if reviewers want a model, candidates already
+  latent in the data are an Amdahl bound on end-to-end gain for each application and a model of
+  repetition noise. Neither is added here, because that would be new analysis, not restructuring.
+- Single-sample cells and the absence of confidence intervals (Section 10.2) are the most likely
+  reviewer objection for a measurement-focused venue.
+- A **null arm** (a rerun of the unmodified binary, scored the same way as the candidates) would
+  measure the noise floor directly instead of inferring it from repetition spread. A related launch-
+  configuration study found that this exposed a baseline-measurement bias that repetition spread had
+  not shown; whether the interleaved design used here is exposed to it is checkable from the existing
+  timing data and is worth checking before a methodology-heavy submission.

@@ -1,0 +1,118 @@
+%% TOMPECS manuscript -- ACM Transactions on Modeling and Performance Evaluation of Computing Systems.
+%% Template: acmart, format `acmsmall` (the acmart guide lists TOMPECS under acmsmall).
+%% `review` is the submission/review-copy option; remove it for the camera-ready version.
+%% Review type (single- or double-blind) is NOT confirmed: if double-blind, add the `anonymous`
+%% option and wrap the acknowledgments in \begin{anonsuppress}...\end{anonsuppress}.
+%% Built from the earlier ACL-style sections by tools/assemble.py; see MAPPING.md.
+\documentclass[acmsmall,review]{acmart}
+
+\usepackage{multirow}
+\usepackage{xspace}
+\newcommand{\tzi}[1]{\textcolor{red}{FIX: #1}\xspace}
+
+%% --- journal metadata (volume, number, article number, DOI and dates are assigned by ACM) ---
+\acmJournal{TOMPECS}
+%\acmVolume{}
+%\acmNumber{}
+%\acmArticle{}
+%\acmYear{2026}
+%\acmMonth{}
+%\acmDOI{}
+
+\begin{document}
+
+\title{Prompting for Performance: Profile-Guided LLM Optimization of Real GPU Applications}
+
+%% TODO: real author details. TOMPECS requires an ORCID for every submitting author.
+\author{First Author}
+\orcid{0000-0000-0000-0000}
+\affiliation{%
+  \institution{Institution}
+  \city{City}
+  \country{Country}}
+\email{email@domain}
+
+\author{Second Author}
+\orcid{0000-0000-0000-0000}
+\affiliation{%
+  \institution{Institution}
+  \city{City}
+  \country{Country}}
+\email{email@domain}
+
+\renewcommand{\shortauthors}{First Author and Second Author}
+
+\begin{abstract}
+\input{sections/abstract}
+\end{abstract}
+
+%% TODO(verify): these CCS concepts were written from memory and are NOT checked against the ACM
+%% classification. Regenerate the CCSXML block and \ccsdesc lines with the tool at
+%% https://dl.acm.org/ccs before submitting; a wrong identifier gives wrong indexing metadata.
+\begin{CCSXML}
+<ccs2012>
+ <concept>
+  <concept_id>10002944.10011123.10011674</concept_id>
+  <concept_desc>General and reference~Performance</concept_desc>
+  <concept_significance>500</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>10002944.10011123.10010912</concept_id>
+  <concept_desc>General and reference~Empirical studies</concept_desc>
+  <concept_significance>300</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>10011007.10010940.10011003.10011002</concept_id>
+  <concept_desc>Software and its engineering~Software performance</concept_desc>
+  <concept_significance>300</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>10011007.10011006.10011041</concept_id>
+  <concept_desc>Software and its engineering~Compilers</concept_desc>
+  <concept_significance>100</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>10010520.10010521.10010528</concept_id>
+  <concept_desc>Computer systems organization~Parallel architectures</concept_desc>
+  <concept_significance>100</concept_significance>
+ </concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{General and reference~Performance}
+\ccsdesc[300]{General and reference~Empirical studies}
+\ccsdesc[300]{Software and its engineering~Software performance}
+\ccsdesc[100]{Software and its engineering~Compilers}
+\ccsdesc[100]{Computer systems organization~Parallel architectures}
+
+\keywords{LLM-driven code optimization, GPU performance engineering, profile-guided prompting,
+performance evaluation methodology, benchmark validity, measurement on shared systems}
+
+\maketitle
+
+\input{sections/01_introduction}
+\input{sections/02_related}
+\input{sections/03_subject}
+\input{sections/04_methodology}
+\input{sections/05_prompt_study}
+\input{sections/06_gaming}
+\input{sections/07_applications}
+\input{sections/08_evidence}
+\input{sections/09_pitfalls}
+\input{sections/10_validity}
+\input{sections/11_conclusion}
+
+%% TODO: acknowledgments (move inside anonsuppress if the review is double-blind).
+\begin{acks}
+Acknowledgments to be added.
+\end{acks}
+
+%% TODO(author): artifact and data availability. State what is released (prompts, gates, raw timings,
+%% generated candidates) and where; nothing is claimed here because nothing has been confirmed.
+\section*{Data and Artifact Availability}
+To be completed by the authors.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{custom}
+
+\end{document}

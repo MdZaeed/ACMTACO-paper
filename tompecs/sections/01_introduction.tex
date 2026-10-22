@@ -1,0 +1,79 @@
+\section{Introduction}
+\label{sec:intro}
+GPU performance engineering is expert work. Getting a kernel to run faster requires reasoning about the
+memory hierarchy, warp scheduling, occupancy and instruction-level behaviour at the same time, and
+expert tuners routinely spend weeks on a single kernel. Large language models can attempt the same edit
+in seconds, which raises an obvious question: how much of that expertise can be supplied through the
+prompt, and how much of the resulting speedup survives contact with a real application?
+
+Existing code benchmarks do not answer this. HumanEval-style suites \cite{chen2021codex} and
+repository-level issue resolution \cite{jimenez2024swebench} score functional correctness, not
+execution time, and recent GPU-specific benchmarks \cite{ouyang2025kernelbench,nichols2024parallel}
+evaluate standalone kernels written from a reference implementation rather than edits to code that a
+scientific application already depends on. Meanwhile, the first thing a human expert looks at---profiler
+output---is exactly the kind of context an LLM never sees by default.
+
+This paper studies an end-to-end loop that closes that gap: profile the application, summarize the
+profile into the prompt, ask the model for an optimized version of one source file, build it, verify it
+against the application's own notion of correctness, measure it, and feed failures back for a bounded
+number of repair iterations. Within this loop we treat the prompt as the object of study.
+% NEW (written for the TOMPECS version; not in the original paper)
+Because the loop's output is a measured execution time, the study is as much about how such systems
+must be \emph{evaluated} as about how they should be prompted. We organize it around five research
+questions:
+\begin{description}\itemsep2pt
+\item[RQ1] Which components of the prompt matter, and how reliably? (Section~\ref{sec:prompts})
+\item[RQ2] Can speedups reported on benchmarks be trusted, and what does a model do when the
+  benchmark's own scaffolding can be deleted? (Section~\ref{sec:intent})
+\item[RQ3] Do conclusions drawn on single-kernel benchmarks transfer to the production applications
+  those kernels represent? (Section~\ref{sec:realapps})
+\item[RQ4] What is profiling evidence worth, supplied raw and supplied interpreted?
+  (Section~\ref{sec:evidence})
+\item[RQ5] What measurement and validation practice is needed to report any of this credibly on shared
+  hardware? (Sections~\ref{sec:method}, \ref{sec:pitfalls} and~\ref{sec:limits})
+\end{description}
+Our contributions are:
+
+\begin{itemize}\itemsep2pt
+\item \textbf{A prompt-component ablation} over six variants, two models and six HeCBench kernels
+  (Section~\ref{sec:ablation}--\ref{sec:results}), showing that prompt components are not equally
+  important: stripping context (\texttt{minimal}) consistently degrades results, while an explicit
+  reasoning step (\texttt{cot}) is the only variant that never hurts.
+\item \textbf{A semantic-preservation constraint} that suppresses benchmark gaming
+  (Section~\ref{sec:intent}). Without it, both models delete the very computation a benchmark exists to
+  measure and report speedups of $1504\times$ and $2809\times$ while output and the built-in
+  verification remain unchanged; with it, both return honest results. We also report the detection rule
+  we use, since neither output comparison nor the benchmark's own check can catch this class of edit.
+\item \textbf{An end-to-end evaluation on three production applications}---AutoDock-GPU, LAMMPS and
+  Cholla (Section~\ref{sec:realapps})---with per-application correctness gates that we validate by
+  fault injection, and interleaved measurement on shared GPUs. The best model output reaches
+  $1.571\times$ on Cholla, beating our expert hand-tuned reference, while on AutoDock-GPU no model or
+  prompt found the restructuring that is worth $1.532\times$ by hand.
+\item \textbf{A profile-data ablation} (Section~\ref{sec:profabl}) that isolates the contribution of
+  PC-sampling and roofline data by removing it from an otherwise identical prompt. Profiling data is
+  worth $7.7$--$11.5\%$ on the large application and nothing measurable on single-kernel benchmarks,
+  which suggests its value scales with how hard the bottleneck is to locate from source alone.
+\item \textbf{A measurement of what happens when profiling data is made prescriptive}
+  (Section~\ref{sec:guidvar}). Converting metrics into a checklist of named remedies produces both our
+  largest gain ($1.04\times \to 1.38\times$) and our largest loss ($7.84\times \to 1.08\times$, where the
+  checklist displaced a restructuring the model had found unaided), at repetition spreads below $5\%$.
+  Interpretation widens the distribution of outcomes rather than shifting its centre, which a mean
+  speedup hides.
+\item \textbf{A set of failure modes specific to real code} (Section~\ref{sec:defects}), including compilation-context blindness
+  (the model cannot see that its file is textually included elsewhere, or that ten call sites depend on
+  a signature), applications whose error handling discards the diagnostic the repair loop needs, and
+  measurement pitfalls on shared machines that silently invalidate results.
+\end{itemize}
+
+Taken together, the results argue that prompt design is a first-order lever for turning general-purpose
+code models into usable performance tools---but also that conclusions drawn on single-kernel benchmarks
+do not automatically transfer to the applications those kernels are meant to represent.
+
+% NEW (written for the TOMPECS version; not in the original paper)
+\paragraph{Organization.}
+Section~\ref{sec:relatedwork} places the work in the literature and Section~\ref{sec:subject}
+describes the optimization pipeline under study. Section~\ref{sec:method} states the workloads,
+platforms, correctness validation and measurement protocol on which every later number depends.
+Sections~\ref{sec:prompts}--\ref{sec:evidence} report the four studies behind RQ1--RQ4,
+Section~\ref{sec:pitfalls} collects the evaluation pitfalls they exposed, Section~\ref{sec:limits}
+states the threats to validity, and Section~\ref{sec:conclusions} concludes.

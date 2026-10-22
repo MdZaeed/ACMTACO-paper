@@ -1,0 +1,100 @@
+\section{Threats to Validity and Limitations}
+\label{sec:limits}
+% NEW (written for the TOMPECS version; not in the original paper)
+We group the limitations of the study by the kind of validity they threaten. The text of each item
+is as in the earlier version of this paper.
+
+\subsection{Measurement and Internal Validity}
+\paragraph{Measurement on shared hardware.}
+All experiments ran on shared GPU nodes. Identical code drifted by up to $49\%$ between sessions, so we
+build every arm once, time them round-robin in a single session, wait for an idle GPU, log other users'
+GPU processes at the start and end of every repetition, and report medians over clean repetitions only.
+Two complete timing passes were discarded because other users' jobs occupied the GPU. Even so,
+detection is imperfect: in one Cholla pass three repetitions drifted by $15\%$ while our detector
+reported no foreign GPU process, so we additionally require repetitions to agree before using them.
+Residual interference cannot be excluded on a shared machine: measurement noise alone puts a floor of
+roughly $2\%$ under any effect we report on the applications, and far higher on the noisiest benchmarks,
+where per-repetition spread exceeds $100\%$.
+
+\paragraph{Tooling defects discovered during the study.}
+The prompt-fidelity defects of Section~\ref{sec:defects} (Table~\ref{tab:defects}) were all present
+during the benchmark study: profiling summaries reached the model with wrong units, truncated
+stall data and understated launch counts, and the repair channel discarded the diagnostics a model
+needed. They are fixed, but every result predating a given fix was produced with the affected prompt
+and would need regeneration to be strictly comparable. We report the benchmark numbers as measured
+rather than re-running the grid, and we do not claim that the ablation of Section~\ref{sec:ablation}
+would reproduce unchanged on the corrected summarizers.
+
+\subsection{Statistical Conclusion Validity}
+\paragraph{Sampling of model outputs.}
+Except where stated, each (application, model, prompt) cell is a \emph{single} LLM sample. Language
+model outputs vary between calls, so a single cell conflates prompt effect with sampling variance. We
+replicated two settings---a second independent generation round for the structural/diagnostic arms, and
+a second profile-data sample for the real applications---and the direction of the effect was stable
+there, but the per-cell numbers in Section~\ref{sec:results} carry no confidence interval. Combined
+with the measurement floor above, this means an effect below roughly $5\%$ in a single cell should be
+treated as unresolved rather than small.
+
+\paragraph{Coverage of the profile-data ablation.}
+The comparison in Section~\ref{sec:profabl} spans 26 (application, model) pairs but scores 21. Two
+benchmarks (\texttt{boxfilter}, \texttt{ccsd-trpdrv}) could not be timed on the available node because
+the \emph{unmodified} programs exceed our $600$\,s per-run cap, costing four pairs, and
+\texttt{background-subtract} under GPT-5 yields no \texttt{code\_only} candidate at all. The
+denominator is therefore small, and---more importantly---the entire positive result rests on a single
+application, Cholla, with two models. The seventeen benchmark pairs establish only that the effect is
+absent there, not that it generalizes to other large applications.
+
+\subsection{Construct Validity}
+\paragraph{Correctness gates are empirical, not proofs.}
+Each application is gated by its own output: bit-exact field comparison where the application is
+deterministic (LAMMPS, Cholla) and a statistical band where it is not (AutoDock-GPU, whose GPU results
+vary run to run even with a fixed seed). We validated every gate by injecting faults, and the Cholla
+gate detects a $10^{-6}$ relative perturbation of a single flux. Nevertheless a subtle accuracy loss
+that stays inside the AutoDock band would pass, gates check the outputs the application prints rather
+than all internal state, and undefined behaviour can pass one build and fail another---our own
+hand-tuned LAMMPS variant did exactly that, producing correct physics in one build and wrong physics in
+a rebuild of the same source. We therefore gate every build that is timed, but ``gated correct'' means
+``passed these checks'', not ``verified''.
+
+\paragraph{Benchmark gaming is detected heuristically.}
+Transformations that delete the measured work while preserving printed output defeat output comparison
+by construction (Section~\ref{sec:intent}). We flag speedups above $5\times$ and inspect the diff. This
+catches the large cases we observed ($1504\times$, $2809\times$, $235$--$949\times$, $31\times$), but a
+gaming transformation yielding, say, $1.5\times$ would not be flagged automatically, and we cannot rule
+out such cases in the reported numbers.
+
+\paragraph{Benchmark verification was unusable as a gate on that node.}
+For the HeCBench part of the profile-data ablation, not one of the nine measured benchmarks gave a
+usable verdict for the \emph{unmodified} program on the H100 node: five (\texttt{adv},
+\texttt{background-subtract}, \texttt{chemv}, \texttt{concat}, \texttt{convolutionSeparable}) print FAIL
+from their own built-in check, and the other four print no verdict at all. In \texttt{chemv} the cause
+is structural rather than numerical: its timing loop launches the two kernels $1000$ times accumulating
+into the same output buffer without re-initializing it, then compares the result against a single
+application of the CPU reference, so the check cannot pass for the unmodified program. A candidate's verdict is therefore informative only where it differs from
+the pristine one, as on \texttt{atomicSystemWide}, where the unmodified program is silent and the
+\texttt{code\_only} candidate reports FAIL. Correctness for the rest rests on the pipeline's
+generation-time check and on our inspection of the diffs, which is weaker than the gates we built for
+the applications. It is also a caution about the benchmark suites these systems are usually evaluated
+on: a built-in PASS/FAIL is not automatically a correctness oracle on hardware the benchmark was not
+tuned for.
+
+\paragraph{Scope of the objective.}
+We optimize execution time of a single GPU kernel file under a correctness gate. We do not study
+energy, memory footprint, multi-GPU scaling, numerical stability under long runs, or maintainability of
+the generated code---all of which matter for production use of these applications.
+
+\subsection{External Validity}
+\paragraph{Hardware and software scope.}
+Results cover NVIDIA GPUs only: H100 PCIe (sm\_90) for the benchmark studies and GH200 (sm\_90) for
+the applications, with CUDA 12.6.3. Conclusions may not transfer across architectures, and we did not test that
+directly: every prompt variant was evaluated on one architecture per study, so an effect that depends
+on register file size, SM count or cache hierarchy would be invisible to us. The profiles supplied for
+the six original ablation benchmarks were themselves collected on an A100 and used on an H100. We use two proprietary models whose weights and versions we do not control; the
+same prompt may behave differently after a model update.
+
+\paragraph{Single-file editing.}
+The pipeline gives the model one source file and replaces that file. The model therefore cannot change
+headers, launch sites or build flags, and---more importantly---cannot see how its file is compiled.
+This caused three of our real-application failures (symbol redefinition in a textually included file,
+and kernel-signature changes that broke linkage against ten call sites). Some optimizations a human
+would make are out of reach by construction.

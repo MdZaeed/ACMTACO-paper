@@ -1,0 +1,38 @@
+\section{The Optimization Pipeline Under Study}
+\label{sec:subject}
+% NEW (written for the TOMPECS version; not in the original paper)
+This section describes the system whose behaviour the rest of the paper evaluates: the loop
+itself, the profiling evidence it can place in the prompt, and the structure of that prompt.
+
+\subsection{Pipeline}
+The framework takes a source file, a build command and a run command, and closes the loop
+\emph{profile $\rightarrow$ prompt $\rightarrow$ generate $\rightarrow$ build $\rightarrow$ verify
+$\rightarrow$ measure}, with bounded repair. The optimized file returned by the model replaces the
+original in a private copy of the application tree, so the build, the callers and the input data are
+those of the real program. If the build or the correctness check fails, the error summary is appended
+to the prompt and the model is asked to repair; we allow three iterations before recording the run as
+a failure.
+
+\subsection{Profiling data}
+We profile with Nsight Compute in two passes: an uncapped pass over every launch that yields true
+launch counts and per-launch durations, and a capped \texttt{-{}-set full} pass that yields the detail
+pages. From the resulting reports we derive three kinds of prompt context:
+\begin{itemize}\itemsep2pt
+  \item \textbf{PC sampling} (\texttt{-{}-page source}): per-source-line warp stall reasons, which we
+    aggregate to the lines with the highest stall ratios.
+  \item \textbf{Roofline} (\texttt{-{}-page details}): per-kernel throughput relative to DRAM and compute
+    peaks, plus the analysis rules Nsight Compute reports.
+  \item \textbf{Importance analysis}: per-kernel aggregate cost (launch count $\times$ per-launch time)
+    used to rank which kernel is worth editing at all.
+\end{itemize}
+A capped profile is only representative if the launches it keeps are: in one application the first 200
+launches were setup rather than simulation, and we skip a measured number of launches before profiling
+(Section~\ref{sec:realapps}).
+
+\subsection{Prompt structure}
+The prompt has five regions: (i) the source file, (ii) the profile summaries above, (iii)
+hardware-specific guardrails (target architecture, shared-memory limits, unavailable intrinsics), (iv)
+general pitfall-avoidance guardrails (entry-point preservation, no signature changes, no new top-level
+symbols, semantic preservation), and (v) an output-format specification requiring a single fenced code
+block plus structured lists of applied and rejected optimizations. Section~\ref{sec:ablation} ablates
+these regions; Section~\ref{sec:profabl} removes region (ii) entirely.
