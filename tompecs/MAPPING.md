@@ -80,7 +80,7 @@ built.
 - **Compile it** (`latexmk -pdf main` or Overleaf with the `tompecs/` folder) and fix whatever the
   first build reports. Expect to adjust the table widths: tables written for two-column ACL pages
   now sit in a single column.
-- **Length.** About 11,200 words and nine tables, which in acmsmall is probably in the mid-twenties
+- **Length.** About 11,200 words and eight tables, which in acmsmall is probably in the mid-twenties
   of pages; this is an estimate. The venue limit is reported as 30 pages; whether references count
   is unknown.
 - Fill in authors, affiliations, ORCIDs, acknowledgments, and the Data and Artifact Availability
