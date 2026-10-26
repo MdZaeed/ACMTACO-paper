@@ -3,8 +3,9 @@ profiling evidence placed in the prompt---shapes the ability of large language m
 code, and of how far the resulting gains survive on production scientific applications. Our framework
 closes the loop from profiling to prompting, generation, build, correctness verification and timed
 measurement, with bounded repair from compiler and runtime feedback. We first ablate prompt components
-across six variants, two models and six HPC kernels: stripping contextual framing consistently degrades
-optimization quality, whereas an explicit reasoning step is the only variant that never hurts. We then
+across six variants, two models and six HPC kernels: stripping the instructions produces the slowest
+valid result more often than any other variant, whereas an explicit reasoning step never produces the
+slowest, although it does not prevent outright failures. We then
 show that guardrails are not merely a safety concern but a correctness one. Without an explicit
 semantic-preservation constraint, both models optimize a benchmark by deleting the very computation it
 exists to measure, reporting speedups of $1504\times$ and $2809\times$ while the program's output and

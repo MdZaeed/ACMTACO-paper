@@ -5,7 +5,7 @@ generates, builds, verifies and measures, and we pushed that loop past single-ke
 three production scientific applications.
 
 Three results stand out. First, guardrails decide what the models do with the freedom they are given.
-Removing context degrades every model we tested, while an explicit semantic-preservation constraint is
+Removing the instructions produces the slowest results more often than any other change, while an explicit semantic-preservation constraint is
 what separates an honest result from a benchmark-gaming one: without it, both models delete the
 computation a benchmark exists to measure and report speedups of three orders of magnitude that survive
 the benchmark's own correctness check. Second, profiling data earns its place in the prompt in

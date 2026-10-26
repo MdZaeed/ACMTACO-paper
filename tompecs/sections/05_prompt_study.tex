@@ -20,8 +20,9 @@ lets the model apply a transformation without having to justify it. The conseque
 \texttt{shmembench}, whose swap loop preserves an algebraic sum invariant: without the proof
 requirement, Gemini~2.5~Pro exploits that invariant to eliminate shared-memory traffic altogether and
 reports a $213\times$ apparent speedup that reflects no hardware improvement. GPT-5 applies the same
-transformation under every variant, including the full prompt---which is what motivates the explicit
+transformation under every variant---which is what motivates the explicit
 semantic-preservation constraint of Section~\ref{sec:intent}.
+% EDIT (2026-10-26): "including the full prompt" removed; the grid has no full-prompt arm.
 
 \paragraph{No Constraints (\texttt{no\_constraints}).}
 The full prompt carries a numbered list of prohibitions: do not rename or remove the entry point, do
@@ -36,9 +37,14 @@ requirement, explanation requirement and format specification---with a single se
 \textit{``Optimize the following CUDA code for execution time.''} The source code and the profiling
 summaries are still supplied, so \texttt{minimal} isolates the value of the \emph{instructions} rather
 than of the evidence; removing the evidence instead is the separate ablation of
-Section~\ref{sec:profabl}. \texttt{Minimal} is the only variant that degrades both models: on
-\texttt{md5hash} GPT-5 produces code $51\%$ slower than its best variant, and on \texttt{shmembench}
-Gemini produces code roughly four times slower than under any other variant.
+Section~\ref{sec:profabl}.
+% EDIT (2026-10-26): "the only variant that degrades both models" and "four times slower than under
+% any other variant" did not match Table 1; restated from the table.
+\texttt{Minimal} gives GPT-5's slowest valid result on four of the five benchmarks it did not game
+(on \texttt{md5hash}, code $51\%$ slower than its best variant), and Gemini's slowest by far on
+\texttt{shmembench} ($18{,}735$\,\textmu s, four times its best valid variant and twice the next
+slowest). For Gemini it is not consistently worse elsewhere: it is Gemini's fastest \texttt{md5hash}
+variant and ties its best \texttt{sobol} result.
 
 \paragraph{No Explanation (\texttt{no\_explanation}).}
 The full prompt asks the model to return, alongside the code, a structured list of the optimizations it
@@ -58,11 +64,16 @@ configuration without incident.
 \paragraph{Chain-of-Thought (\texttt{cot}).}
 Unlike the others, \texttt{cot} adds a component rather than removing one: a single instruction,
 \textit{``Think step by step about which bottlenecks to address before writing any code,''} is
-prepended to the instruction block. It is the only variant that never degrades either model relative to
-the full prompt, reaching the best observed speedup for both on \texttt{bitonic-sort}
-($1.14\times$ and $1.13\times$). It is not uniformly safe, however: Gemini's \texttt{sobol} run under
-\texttt{cot} introduced \texttt{\_\_builtin\_ctz}---a host-only intrinsic---inside a
-\texttt{\_\_global\_\_} kernel and could not repair the resulting compile error within three iterations.
+prepended to the instruction block.
+% EDIT (2026-10-26): "never degrades either model relative to the full prompt" removed; there is no
+% full-prompt arm, and Gemini fails two cot runs. Restated from Table 1.
+Among valid runs it is the most consistent variant: it never gives either model's slowest result on any
+benchmark, and it reaches the best observed speedup for both on \texttt{bitonic-sort}
+($1.14\times$ and $1.13\times$). It is not reliable, however: Gemini produced no valid candidate under
+\texttt{cot} on two of the six benchmarks. On \texttt{sobol} it introduced
+\texttt{\_\_builtin\_ctz}---a host-only intrinsic---inside a \texttt{\_\_global\_\_} kernel and could
+not repair the resulting compile error within three iterations, and on \texttt{atan2} all three
+iterations failed.
 
 \paragraph{Variants not evaluated.}
 \texttt{no\_format} strips the output-format specification and asks only for optimized code. We exclude
@@ -74,7 +85,17 @@ the persona.
 
 \subsection{Results}
 \label{sec:results}
-The ablation study evaluated GPT-5 and Gemini 2.5 Pro across six prompt variants and six HeCBench benchmarks, yielding 72 experimental runs in total (2 models × 6 variants × 6 apps). Across all successful runs, GPT-5 demonstrated consistently higher first-attempt success rates, requiring only a single build iteration in 32 of 36 cases compared to Gemini's 24 of 36. Gemini exhausted all three repair iterations on 8 runs (4 failures, 4 eventually repaired), with sobol being its most problematic benchmark (3 outright failures due to correctness violations and a persistent \texttt{\_\_builtin\_ctz} host-device mismatch).
+% EDIT (2026-10-26): the counts below were copied from an aggregate that does not match the raw
+% table; recounted from Table 1 (ablation_study_details.md, per-benchmark tables).
+Table~\ref{tab:ablation} reports all $72$ runs ($2$ models $\times$ $6$ variants $\times$ $6$
+benchmarks). Each runtime is the pipeline's own average over ten runs of the generated binary,
+measured during the study rather than in the separate interleaved pass of
+Section~\ref{sec:timing}, and no unmodified-program runtime was recorded for \texttt{atan2},
+\texttt{md5hash} and \texttt{accuracy}, so those three benchmarks compare variants with one another
+only. GPT-5 produced a timed result on the first attempt in $32$ of $36$ runs, Gemini~2.5~Pro in
+$26$ of $36$. Gemini used all three iterations on six runs, two of which were eventually repaired;
+four failed, three of them on \texttt{sobol} (two correctness violations and a persistent
+\texttt{\_\_builtin\_ctz} host-device mismatch).
 
 \begin{table*}[t]
 \centering
@@ -165,20 +186,26 @@ $1.14\times$ (GPT-5 on \texttt{bitonic-sort} under \texttt{no\_constraints}, \te
 variant effects rather than by any genuine optimization.
 
 \paragraph{Prompt components are not equally important.}
-The \texttt{minimal} variant consistently underperforms---most clearly on \texttt{md5hash}
-(GPT-5: $396{,}800$\,\textmu s versus $262{,}500$\,\textmu s under \texttt{no\_constraints}, about
-$1.5\times$ slower) and on \texttt{shmembench} (Gemini: $18{,}735$\,\textmu s versus roughly
-$4{,}660$\,\textmu s for every other variant). Stripping contextual framing measurably degrades
-optimization quality. Conversely, \texttt{cot} is stable or slightly better for both models, though the
-improvement is modest. Every other component is model-dependent: removing constraints helps GPT-5 on
+% EDIT (2026-10-26): restated from Table 1; the earlier text said minimal "consistently" degrades
+% both models and cot "never hurts", which the table does not support for Gemini.
+The \texttt{minimal} variant produces the slowest valid result more often than any other---for GPT-5
+on four of the five benchmarks it did not game, most clearly on \texttt{md5hash} ($396{,}800$\,\textmu s
+versus $262{,}500$\,\textmu s under \texttt{no\_proof}, about $1.5\times$ slower), and for Gemini on
+\texttt{shmembench} ($18{,}735$\,\textmu s versus $4{,}661$\,\textmu s for its best valid
+variant). Stripping the instructions therefore degrades GPT-5 consistently and Gemini
+occasionally but severely. Conversely, \texttt{cot} never gives either model its slowest valid
+result, though it improves on the best of the other variants only modestly, and Gemini failed to
+produce any valid candidate under it on two benchmarks. Every other component is model-dependent: removing constraints helps GPT-5 on
 \texttt{bitonic-sort} but hurts Gemini; removing the explanation helps Gemini on the same benchmark but
 has no consistent effect elsewhere; and removing the role assignment caused a timeout for GPT-5 on
-\texttt{accuracy} while Gemini handled it without issue. \texttt{Minimal} is the only variant that
-consistently degrades both models, and \texttt{cot} the only one that never hurts either.
+\texttt{accuracy} while Gemini handled it without issue.
 
 \paragraph{Reliability.}
-GPT-5 succeeds on the first attempt in $32$ of $36$ runs, Gemini~2.5~Pro in $24$ of $36$. Gemini
-exhausts all three repair iterations on eight runs, four of which are eventually repaired and four of
-which fail outright; \texttt{sobol} accounts for three of the four failures, through correctness
-violations and the host-only-intrinsic error described in Section~\ref{sec:ablation}. First-attempt
-success rate, not peak speedup, is the dimension on which the two models differ most.
+% EDIT (2026-10-26): counts recounted from Table 1 (were 24 of 36 and eight).
+GPT-5 produces a timed result on the first attempt in $32$ of $36$ runs (of the other four, two
+needed repair, one timed out and one built but its runtime could not be extracted), Gemini~2.5~Pro in
+$26$ of $36$. Gemini uses all three iterations on six runs, two of which are eventually repaired and
+four of which fail outright; \texttt{sobol} accounts for three of the four failures, through
+correctness violations and the host-only-intrinsic error described in Section~\ref{sec:ablation}.
+GPT-5 has no build or correctness failure; its one unusable run is the timeout. First-attempt success rate, not peak speedup, is the dimension on which
+the two models differ most.

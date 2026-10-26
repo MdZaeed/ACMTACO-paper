@@ -37,8 +37,9 @@ Our contributions are:
 \begin{itemize}\itemsep2pt
 \item \textbf{A prompt-component ablation} over six variants, two models and six HeCBench kernels
   (Sections~\ref{sec:ablation}--\ref{sec:results}), showing that prompt components are not equally
-  important: stripping context (\texttt{minimal}) consistently degrades results, while an explicit
-  reasoning step (\texttt{cot}) is the only variant that never hurts.
+  important: stripping the instructions (\texttt{minimal}) gives the slowest valid result more
+  often than any other variant, while an explicit reasoning step (\texttt{cot}) never does, although
+  it does not prevent outright failures.
 \item \textbf{A semantic-preservation constraint} that suppresses benchmark gaming
   (Section~\ref{sec:intent}). Without it, both models delete the very computation a benchmark exists to
   measure and report speedups of $1504\times$ and $2809\times$ while output and the built-in
