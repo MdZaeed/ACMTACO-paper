@@ -1,7 +1,7 @@
 # TOMPECS version: structure, provenance, and open items
 
-Branch `tompecs` of this repository; the original ACL-style paper is untouched on `main`
-(`sections/`, `sections/main.tex`). Everything new is in `tompecs/`.
+The TOMPECS manuscript is `tompecs/` on `main` (which Overleaf syncs); the original ACL-style paper is
+kept, unedited, in `sections/` and `main.pdf`. The `tompecs` branch on the remote is stale.
 
 ## What was verified about the venue, and how sure we are
 
@@ -51,7 +51,7 @@ not already in the paper:
 3. Section 4.5 Reporting Conventions, which restates conventions already stated elsewhere
    (medians over clean repetitions, speedups against the unmodified program, single-sample cells,
    the 5% unresolved threshold, the tie rule, the 5x alarm);
-4. Table 9 (`tab:pitfalls`), a summary of pitfalls whose every row cites a finding made elsewhere.
+4. the pitfalls table (`tab:pitfalls`), a summary whose every row cites a finding made elsewhere.
 
 Edits to existing wording (marked `% EDIT`, plus heading renames):
 
@@ -105,3 +105,28 @@ built.
   configuration study found that this exposed a baseline-measurement bias that repetition spread had
   not shown; whether the interleaved design used here is exposed to it is checkable from the existing
   timing data and is worth checking before a methodology-heavy submission.
+
+## Changes after assembly (writing session, from 2026-10-26)
+
+Each is a separate commit; edited prose carries an `% EDIT (2026-10-26)` or `% NEW (2026-10-26)`
+comment. Statements still awaiting evidence or a decision are marked `\needcheck{...}` (blue), defined
+in `main.tex`.
+
+- **LAMMPS removed** (author's decision: Kokkos C++ is outside the pipeline's CUDA scope). Two
+  applications remain. Lost with it: the GPU-package Amdahl paragraph, the withdrawn hand-tuned
+  variant, the capped-profile/launch-skip sentence.
+- **`chemv` removed from all results** (its built-in check cannot certify output) and described in
+  8.2 as an outlier: a correct removal of unneeded loop structure, checked on 2026-10-26 with
+  REPEAT=1 against the CPU reference.
+- **Section 5** text made consistent with Table 1 (first-attempt counts; `minimal`/`cot` claims; no
+  full-prompt arm). Abstract, introduction and conclusion follow.
+- **Methodology**: where each table was measured and over how many clean repetitions; the Section 5
+  grid is in-pipeline timing.
+- **Cholla headline** stated over all four baseline-prompt samples (1.476-1.584x).
+- **8.2** re-attributes the `concat`/Gemini gain and most of the `boxfilter`/GPT-5 loss to the
+  structural prompt; the >5x `boxfilter` diffs were inspected.
+- **10.2**: no valid replicate of the guidance comparison (the round-2 timing ran on the broken node).
+- **HeCBench half of the profile-data ablation re-timed** on illyad with CUDA 13.3.1
+  (`~/latest_opal/rerun_cu133/` on the cluster; the original 2026-09-22 timing ran during the
+  driver fault of report sec. 14).
+- Cross-references repaired (new labels `sec:timing`, `sec:constraint`); Related Work deduplicated.
