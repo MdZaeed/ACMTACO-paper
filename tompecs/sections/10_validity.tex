@@ -27,10 +27,18 @@ would reproduce unchanged on the corrected summarizers.
 \subsection{Statistical Conclusion Validity}
 \paragraph{Sampling of model outputs.}
 Except where stated, each (application, model, prompt) cell is a \emph{single} LLM sample. Language
-model outputs vary between calls, so a single cell conflates prompt effect with sampling variance. We
-replicated two settings---a second independent generation round for the structural/diagnostic arms, and
-a second profile-data sample for the real applications---and the direction of the effect was stable
-there, but the per-cell numbers in Section~\ref{sec:results} carry no confidence interval. Combined
+model outputs vary between calls, so a single cell conflates prompt effect with sampling variance.
+% EDIT (2026-10-26): the earlier text claimed a stable replicate of the structural/diagnostic arms.
+% That round (report sec. 12) was timed on the H100 node while its driver state produced wrong
+% output and 20-300x inflated times (report sec. 14), covered 6 GPT-5 pairs before it was stopped,
+% and used a revised checklist; it is not evidence either way.
+Only one setting is replicated: a second, independently generated sample of the baseline prompt on
+both applications, which keeps Cholla on the same side of the profile-data comparison
+(Section~\ref{sec:profabl}) and reproduces AutoDock-GPU's tie. The prescriptive-guidance comparison of
+Section~\ref{sec:guidvar} has no valid replicate: a second generation round was timed on the H100 node
+while a driver change there made unmodified benchmarks produce wrong output and run $20$--$300\times$
+slower, and it was stopped after six pairs. Its cells, like the per-cell numbers in
+Section~\ref{sec:results}, are single samples with no confidence interval. Combined
 with the measurement floor above, this means an effect below roughly $5\%$ in a single cell should be
 treated as unresolved rather than small.
 
