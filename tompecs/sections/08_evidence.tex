@@ -109,11 +109,15 @@ qualified conclusion: interpretation does not shift the average outcome so much 
 distribution of outcomes.
 
 \paragraph{Setup.}
+% EDIT (2026-10-26): chemv removed (see the last paragraph of this section); concat/Gemini and
+% boxfilter/GPT-5 effects re-attributed to the structural prompt; the >5x boxfilter results inspected.
 Table~\ref{tab:guidvar} reports four arms on one node (GH200, idle, all arms built once and timed
 round-robin in a single session): the unmodified program, the constrained \emph{baseline} prompt, the
 relaxed \emph{structural} prompt, and \emph{diagnostics}, which is the structural prompt plus the
-checklist. These are the tightest measurements in this paper---most repetition spreads are below $5\%$
-and several are below $0.1\%$---so the differences below are not measurement artifacts.
+checklist. The cleanest comparison is therefore \emph{diag} against \emph{struct}, which differ only
+in the checklist. Half of the rows have a repetition spread below $5\%$, including the two largest
+effects of the checklist, so those differences are not measurement artifacts; each cell is, however,
+a single generation (Section~\ref{sec:limits}).
 
 \begin{table}[t]
 \centering
@@ -122,20 +126,20 @@ and several are below $0.1\%$---so the differences below are not measurement art
 \caption{Effect of converting profiling metrics into a prescriptive checklist (\emph{diag}), against
   the constrained (\emph{base}) and relaxed (\emph{struct}) prompts. Speedups are interleaved medians
   against the unmodified program on one GH200. \textbf{Bold} marks the cases discussed in the text.
-  ``spread'' is the largest repetition spread across the four arms.}
+  ``spread'' is the largest repetition spread across the four arms. \texttt{chemv} is excluded
+  (see text).}
 \label{tab:guidvar}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}llrrrr@{}}
 \toprule
 \textbf{Benchmark} & \textbf{Model} & \textbf{base} & \textbf{struct} & \textbf{diag} & \textbf{spread} \\
 \midrule
-\texttt{chemv}                & Gemini & \textbf{7.835}$\times$ & 7.638$\times$ & \textbf{1.075}$\times$ & 1.9\% \\
 \texttt{concat}               & GPT-5  & 1.031$\times$ & 0.838$\times$ & \textbf{0.349}$\times$ & 0.1\% \\
 \texttt{boxfilter}            & GPT-5  & \textbf{10.280}$\times$ & 6.352$\times$ & 5.503$\times$ & 0.0\% \\
 \midrule
 \texttt{bincount}             & GPT-5  & 1.035$\times$ & 1.037$\times$ & \textbf{1.374}$\times$ & 5.2\% \\
 \texttt{bincount}             & Gemini & 1.106$\times$ & 1.003$\times$ & \textbf{1.380}$\times$ & 4.4\% \\
-\texttt{concat}               & Gemini & 1.001$\times$ & 1.797$\times$ & \textbf{1.798}$\times$ & 46.8\% \\
+\texttt{concat}               & Gemini & 1.001$\times$ & \textbf{1.797}$\times$ & 1.798$\times$ & 46.8\% \\
 \texttt{boxfilter}            & Gemini & 8.691$\times$ & 8.930$\times$ & 9.371$\times$ & 42.6\% \\
 \texttt{convolutionSeparable} & Gemini & 1.418$\times$ & 1.499$\times$ & 1.514$\times$ & 19.3\% \\
 \midrule
@@ -145,31 +149,65 @@ and several are below $0.1\%$---so the differences below are not measurement art
 }
 \end{table}
 
-\paragraph{The checklist produces our largest gains.}
-On \texttt{bincount} it takes both models from roughly $1.04$--$1.11\times$ to $1.37$--$1.38\times$,
-approaching our hand-tuned reference ($1.392\times$), and on \texttt{concat} under Gemini it is the
-difference between no speedup and $1.80\times$. Where the measured condition is real and the named
-remedy is the right one, telling the model what to do works.
+\paragraph{The checklist produces our largest gain.}
+On \texttt{bincount} it takes both models from roughly $1.00$--$1.04\times$ under the structural prompt
+to $1.37$--$1.38\times$, approaching our hand-tuned reference ($1.392\times$). Where the measured
+condition is real and the named remedy is the right one, telling the model what to do works. The
+other large improvement in the table is not the checklist's: on \texttt{concat} under Gemini the
+$1.80\times$ appears already under the structural prompt ($1.797\times$), whose relaxed syntactic
+rules permit the vectorized templating it needs, and the checklist adds nothing ($1.798\times$) at a
+$46.8\%$ spread.
 
-\paragraph{It also produces our largest losses, on the same benchmarks.}
-On \texttt{chemv} the unaided model had restructured the polyhedral-generated kernel into two
-row-parallel kernels---one per triangle half, conjugation preserved on the upper one---a genuine
-algorithmic rewrite worth $7.835\times$. Given the checklist, it kept the original loop nest and bolted
-on the shared-memory staging the checklist named, collapsing to $1.075\times$. On \texttt{concat},
-GPT-5 followed the instruction to process several elements per thread literally, to
-one-thread-per-128-element line: a $128\times$ collapse in parallelism, measured at $0.349\times$ with a
-$0.1\%$ spread. On \texttt{boxfilter} the same prompt costs GPT-5 nearly half of a $10.280\times$ result.
+\paragraph{It also produces our largest loss.}
+On \texttt{concat}, GPT-5 followed the instruction to process several elements per thread literally,
+to one-thread-per-128-element line: a $128\times$ collapse in parallelism, measured at $0.349\times$
+against $0.838\times$ without the checklist, with a $0.1\%$ spread. On \texttt{boxfilter}, GPT-5's
+$10.280\times$ under the baseline prompt falls to $6.352\times$ when the syntactic rules are relaxed and
+to $5.503\times$ with the checklist added; most of that loss belongs to the relaxation, not to the
+checklist. All \texttt{boxfilter} results exceed our $5\times$ alarm, so we inspected the diffs: every
+candidate keeps the timing loop and both kernel launches per cycle, and gains by tiling the column
+pass over rows, which the original runs as one thread per image column ($30$ blocks of $64$ threads
+for a $1920$-pixel-wide image); the benchmark's own check compares every output pixel exactly with a
+host implementation.
 
 \paragraph{Interpretation narrows the search.}
 A checklist of remedies is an anchor as much as a hint. When the listed transformation is the best
-available one, anchoring is worth a large factor; when the model would have found something better
-unaided, the anchor is what it finds instead. Averaged over our benchmarks the effect is close to
-neutral, which is why a mean speedup---the statistic the literature reports---hides it. The dispersion
-is the result: the same prompt component that produces $1.380\times$ on one benchmark produces
-$0.349\times$ on another, both at sub-$5\%$ spread.
+available one, anchoring is worth a large factor; when it is not, the model applies it anyway, as
+GPT-5 did on \texttt{concat}. Averaged over all twelve (benchmark, model) pairs we measured the effect
+is close to neutral---a geometric mean of $0.97\times$ against the structural prompt, with
+individual pairs from $0.42\times$ to $1.38\times$---which is why a mean speedup, the statistic the
+literature reports, hides it. The dispersion is the result: the same prompt component that produces
+$1.380\times$ on one benchmark produces $0.349\times$ on another, both at sub-$5\%$ spread.
 
 Two practical consequences follow. First, prescriptive guidance should be reported with its variance,
 not only its mean; we would not have seen this in a geometric-mean summary. Second, the guidance should
 be \emph{evidence rather than remedy}---state the measured condition (``$23\%$ occupancy, limited by
 109 registers per thread'') and let the model decide what follows, instead of naming the
 transformation. We did not get to test that variant, and it is the first thing we would run next.
+
+\paragraph{An excluded outlier: \texttt{chemv}.}
+% NEW (2026-10-26). Evidence: chemv-verification-vacuous (experiments memory), report sec. 13.3/14,
+% and a re-check on illyad (CUDA 13.3.1, 2026-10-26) of every chemv candidate with REPEAT=1 against
+% the CPU reference: max relative error 2.2e-7 for the unmodified program and for Gemini's baseline
+% candidate, at most 1.1e-6 for any candidate.
+We exclude \texttt{chemv} from every table because its built-in verification cannot certify a result.
+Its timing loop launches both kernels $1000$ times, accumulating into the same output vector without
+re-initializing it, and then compares that vector with a single application of the CPU reference: the
+check fails for the unmodified program, or---once the accumulated values overflow to NaN---passes
+vacuously, because a comparison with NaN is never true. The case is nonetheless instructive. Under the
+baseline prompt, Gemini rewrote both polyhedral-compiler-generated kernels: it replaced each thread's
+tiled loop nest (an outer loop over $32$-element tiles with a barrier per tile, and an inner loop
+clipped to the tile) by a single loop over the same elements of its row, removed the barriers---which
+the computation does not need, since each thread updates only its own output element and the kernels
+use no shared memory---and accumulated in registers instead of reading and writing the output in global
+memory on every iteration. The number of multiply-adds is unchanged; what was removed is loop structure
+that correct output does not require. The benchmark timed it at $7.8\times$, over our $5\times$ alarm,
+so we checked it outside the benchmark's harness, running one application of the two kernels (no
+repeat loop, so nothing overflows) against the CPU reference: its largest relative error is
+$2.2\times10^{-7}$, identical to the unmodified program's, and no \texttt{chemv} candidate from either
+model in the baseline, structural, checklist or profile-data arms exceeds $1.1\times10^{-6}$. Under the checklist the same model kept the original tile
+loops and added the shared-memory staging the checklist named. We report the case as an example of the
+pipeline removing loops that correctness does not need---the legitimate counterpart of the gaming of
+Section~\ref{sec:intent}, which removed a loop the measurement does need---and not as a measured
+speedup, since the timing that produced it rests on a loop whose output is NaN.
+

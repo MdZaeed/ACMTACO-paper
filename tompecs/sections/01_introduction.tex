@@ -57,8 +57,9 @@ Our contributions are:
   which suggests its value scales with how hard the bottleneck is to locate from source alone.
 \item \textbf{A measurement of what happens when profiling data is made prescriptive}
   (Section~\ref{sec:guidvar}). Converting metrics into a checklist of named remedies produces both our
-  largest gain ($1.04\times \to 1.38\times$) and our largest loss ($7.84\times \to 1.08\times$, where the
-  checklist displaced a restructuring the model had found unaided), at repetition spreads below $5\%$.
+  largest gain ($1.00\times \to 1.38\times$ on \texttt{bincount}) and our largest loss
+  ($0.84\times \to 0.35\times$ on \texttt{concat}, where the model applied a named remedy literally),
+  at repetition spreads below $5\%$.
   Interpretation widens the distribution of outcomes rather than shifting its centre, which a mean
   speedup hides.
 \item \textbf{A set of failure modes specific to real code} (Section~\ref{sec:defects}), including compilation-context blindness
