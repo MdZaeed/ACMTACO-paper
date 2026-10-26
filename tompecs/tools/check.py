@@ -13,12 +13,20 @@ float that will not fit. It does check what an assembly mistake would break:
      list of lines that were deliberately changed (reported, so they can be reviewed)
 
 Exit status 1 if any check fails.
+
+    python3 tools/check.py                    all six checks (valid only for the freshly assembled text)
+    python3 tools/check.py --structure-only   checks 1-3 and "every cited key exists in custom.bib":
+                                              use this once the manuscript has been edited by hand, since
+                                              checks 4-6 compare it with the original paper and will
+                                              (rightly) report every legitimate edit as a difference
 """
 import collections
 import glob
 import os
 import re
 import sys
+
+STRUCTURE_ONLY = "--structure-only" in sys.argv
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")
@@ -91,7 +99,7 @@ def cites(t):
 cn, co = cites(new_all), cites(old_all)
 for k in sorted(cn - bib):
     fails.append("citation key %s not in custom.bib" % k)
-if cn != co:
+if cn != co and not STRUCTURE_ONLY:
     fails.append("cited keys differ from the original: only-new=%s only-old=%s" % (sorted(cn - co), sorted(co - cn)))
 
 
@@ -104,7 +112,7 @@ def numbers(t):
 
 no, nn = numbers(old_all), numbers(new_all)
 lost = {k: v - nn.get(k, 0) for k, v in no.items() if nn.get(k, 0) < v}
-for k, v in sorted(lost.items()):
+for k, v in sorted({} if STRUCTURE_ONLY else lost.items()):
     fails.append("number %s appears %d fewer time(s) than in the original" % (k, v))
 
 # 6. lines
@@ -127,13 +135,14 @@ EXPECTED = [  # lines deliberately changed by assemble.py
     ("analysis", "\\paragraph{Benchmark gaming.}"),
     ("analysis", "\\paragraph{From benchmarks to applications.}"),
 ]
-unexpected = [m for m in missing if m not in EXPECTED]
+unexpected = [] if STRUCTURE_ONLY else [m for m in missing if m not in EXPECTED]
 for n, l in unexpected:
     fails.append("original line missing from the new manuscript [%s]: %s" % (n, l[:110]))
 
 print("files checked: %d | labels: %d | refs: %d | citation keys: %d (bib has %d)" %
       (len(new), len(labels), len(refs), len(cn), len(bib)))
-print("original lines: %d, carried over verbatim: %d, deliberately changed: %d" %
+if not STRUCTURE_ONLY:
+  print("original lines: %d, carried over verbatim: %d, deliberately changed: %d" %
       (sum(1 for n in OLD_FILES for l in old[n].splitlines() if l.strip()),
        sum(1 for n in OLD_FILES for l in old[n].splitlines() if l.strip()) - len(missing), len(missing) - len(unexpected)))
 if fails:
