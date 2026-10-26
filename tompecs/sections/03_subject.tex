@@ -25,9 +25,6 @@ pages. From the resulting reports we derive three kinds of prompt context:
   \item \textbf{Importance analysis}: per-kernel aggregate cost (launch count $\times$ per-launch time)
     used to rank which kernel is worth editing at all.
 \end{itemize}
-A capped profile is only representative if the launches it keeps are: in one application the first 200
-launches were setup rather than simulation, and we skip a measured number of launches before profiling
-(Section~\ref{sec:realapps}).
 
 \subsection{Prompt structure}
 The prompt has five regions: (i) the source file, (ii) the profile summaries above, (iii)

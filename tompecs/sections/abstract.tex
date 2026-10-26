@@ -10,7 +10,7 @@ show that guardrails are not merely a safety concern but a correctness one. With
 semantic-preservation constraint, both models optimize a benchmark by deleting the very computation it
 exists to measure, reporting speedups of $1504\times$ and $2809\times$ while the program's output and
 its built-in verification remain unchanged; the constraint reduces both to honest results. Moving from
-kernels to applications---AutoDock-GPU, LAMMPS and Cholla, each gated by its own scientific output and
+kernels to applications---AutoDock-GPU and Cholla, each gated by its own scientific output and
 measured under interleaved timing on shared GPUs---we find that models reliably discover local, exact
 transformations and reliably miss cross-cutting restructuring: on Cholla all four model outputs under
 the baseline prompt (two independent samples per model, $1.48$--$1.58\times$) beat our expert

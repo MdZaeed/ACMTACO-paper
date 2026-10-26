@@ -46,13 +46,11 @@ absent there, not that it generalizes to other large applications.
 \subsection{Construct Validity}
 \paragraph{Correctness gates are empirical, not proofs.}
 Each application is gated by its own output: bit-exact field comparison where the application is
-deterministic (LAMMPS, Cholla) and a statistical band where it is not (AutoDock-GPU, whose GPU results
+deterministic (Cholla) and a statistical band where it is not (AutoDock-GPU, whose GPU results
 vary run to run even with a fixed seed). We validated every gate by injecting faults, and the Cholla
 gate detects a $10^{-6}$ relative perturbation of a single flux. Nevertheless a subtle accuracy loss
 that stays inside the AutoDock band would pass, gates check the outputs the application prints rather
-than all internal state, and undefined behaviour can pass one build and fail another---our own
-hand-tuned LAMMPS variant did exactly that, producing correct physics in one build and wrong physics in
-a rebuild of the same source. We therefore gate every build that is timed, but ``gated correct'' means
+than all internal state. We gate every build that is timed, but ``gated correct'' means
 ``passed these checks'', not ``verified''.
 
 \paragraph{Benchmark gaming is detected heuristically.}

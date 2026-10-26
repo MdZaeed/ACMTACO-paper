@@ -85,5 +85,4 @@ Neither output comparison nor the benchmark's own PASS check detects this class 
 construction: the exploit preserves the printed result. In our pipeline it was caught by an
 implausibility threshold ($>5\times$) followed by manual inspection of the diff. We therefore treat any
 speedup above that threshold as a correctness alarm rather than a result; the same rule later exposed a
-$31\times$ \texttt{amgmk} candidate that had deleted the benchmark's report sections, and a $3.25\times$
-LAMMPS candidate that was computing wrong physics (Section~\ref{sec:realapps}).
+$31\times$ \texttt{amgmk} candidate that had deleted the benchmark's report sections.

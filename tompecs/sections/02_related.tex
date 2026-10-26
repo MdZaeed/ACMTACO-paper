@@ -19,7 +19,7 @@ PyTorch baseline in fewer than 20\% of tasks \cite{ouyang2025kernelbench}; ParEv
 code generation across execution models and shows a marked gap between sequential and parallel
 generation quality \cite{nichols2024parallel}. All of these generate or rewrite \emph{standalone}
 kernels or short programs. The distinguishing feature of our study is that the artifact under
-optimization is one file inside a production application---AutoDock-GPU, LAMMPS, Cholla---which keeps
+optimization is one file inside a production application---AutoDock-GPU or Cholla---which keeps
 its build system, its callers, and its own scientific validation.
 
 \paragraph{Profiling data as LLM context.}
@@ -88,7 +88,7 @@ an expert diff cannot provide.
 
 \paragraph{HPC benchmark suites.}
 We use HeCBench \cite{jin2023hecbench} for the prompt ablation, which provides many small CUDA kernels
-with built-in verification, and three production applications for the end-to-end study. The contrast
+with built-in verification, and two production applications for the end-to-end study. The contrast
 between the two is one of our main findings: conclusions drawn on single-kernel benchmarks did not
 transfer to applications, either for the value of profiling data or for the prompt variant that works
 best.

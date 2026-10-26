@@ -22,10 +22,8 @@ Built-in PASS/FAIL that gives no usable verdict on the unmodified program
   & \ref{sec:limits} & A candidate's verdict is informative only where it differs from the pristine one; explicit gates for applications \\
 Drift between sessions on shared nodes (up to $49\%$ on identical code)
   & \ref{sec:method} & Build once, interleave arms, wait for an idle GPU, log foreign GPU processes per repetition, require repetitions to agree \\
-Gates that pass once and fail on a rebuild (hand-tuned LAMMPS variant)
-  & \ref{sec:realapps} & Gate every build that is timed; validate each gate by fault injection \\
-Target kernel dominant in GPU time but not in application time
-  & \ref{sec:realapps} & Confirm end-to-end dominance before evaluating (LAMMPS: switch to the Kokkos backend) \\
+Application output with no built-in check, or not reproducible run to run
+  & \ref{sec:realapps} & One gate per application, bit-exact or a statistical band; validate each gate by fault injection \\
 Wall clock dominated by setup (AutoDock-GPU CUDA setup: $68$\,s)
   & \ref{sec:method} & Use each application's own phase timer \\
 Prompt contents differing from what was believed sent
@@ -57,7 +55,7 @@ model as a fault in its own code, and an error filter that kept only lines match
 One defect deserves separate mention because it is a design decision rather than an oversight. The
 pipeline strips all comments from the source before prompting, to save tokens, and then replaces the
 original file with the model's full-file answer---so every optimized file lost its license header and
-all of its documentation. We initially, and wrongly, attributed the missing LGPL and GPL headers to the
+all of its documentation. We initially, and wrongly, attributed the missing LGPL header of AutoDock-GPU to the
 models; the prompts contained no occurrence of ``Copyright''. We now re-attach the original leading
 comment block when it is a license and the candidate lacks it, but the general question stands: comment
 stripping also discards institutional knowledge such as \texttt{// DO NOT UNDEFINE} directives that
@@ -80,10 +78,9 @@ Shared memory read without unit & $7.43$\,Kbyte/block shown as ``7 bytes''; stat
 Per-section CSV headers ignored & $25$ of $26$ sections dropped on one input ($36/76$ stall rows
   reached the model) \\
 Stall reasons from a Python \texttt{set} & Prompt text not reproducible across processes \\
-Kernel names matched verbatim & Namespaced and templated kernels fell back to the capped launch count
-  ($9$ instead of $49$) \\
+Kernel names matched verbatim & Namespaced and templated kernels fell back to the capped launch count \\
 Comments stripped before prompting & Optimized files lost their license header and all documentation \\
-Echoed line numbers not stripped & Uncompilable output; one wasted repair iteration \\
+Echoed line numbers not stripped & Uncompilable output when a model echoes the numbered source \\
 Fixed $300$\,s build timeout & Real-application rebuilds reported to the model as its own fault \\
 Linker cause lines filtered out & Repair prompt contained no actionable error \\
 \bottomrule

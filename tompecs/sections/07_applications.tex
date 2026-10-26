@@ -1,10 +1,13 @@
 \section{Production Applications}
 \label{sec:realapps}
 The ablation of Section~\ref{sec:ablation} uses single-file HeCBench kernels. To test whether the
-pipeline transfers to production scientific software, we applied it end to end to three real
-applications. Unless stated otherwise, experiments in this section use GPT-5 and Gemini~3.1~Pro
-(not Gemini~2.5~Pro as in Section~\ref{sec:results}) on an NVIDIA GH200 (sm\_90); the LAMMPS and
-Cholla profiles were collected on the same device on which they were measured.
+pipeline transfers to production scientific software, we applied it end to end to two real
+applications.
+% EDIT (2026-10-26): LAMMPS removed (author's decision). Its target is Kokkos C++, outside the
+% pipeline's CUDA scope (real-applications report, sec. 5.2).
+Unless stated otherwise, experiments in this section use GPT-5 and Gemini~3.1~Pro
+(not Gemini~2.5~Pro as in Section~\ref{sec:results}) on an NVIDIA GH200 (sm\_90); the Cholla
+profile was collected on the same device on which it was measured.
 
 \subsection{Applications and targets}
 Table~\ref{tab:apps} lists the applications. For each, we profiled the whole application with Nsight
@@ -22,7 +25,6 @@ pipeline that single file to optimize, exactly as for a benchmark.
 \textbf{Application} & \textbf{Target file (hot kernel)} & \textbf{Share} \\
 \midrule
 AutoDock-GPU & \texttt{calcMergeEneGra.cu} & 98.7\% \\
-LAMMPS (Kokkos) & \texttt{pair\_eam\_kokkos.cpp} & 62--68\% \\
 Cholla & \texttt{hllc\_cuda.cu} & 56.0\% \\
 \bottomrule
 \end{tabular}
@@ -35,9 +37,6 @@ We therefore built one gate per application and validated each gate negatively a
   \item \textbf{AutoDock-GPU} is stochastic on the GPU even with a fixed seed (best energies
     $-13.89$, $-14.38$, $-14.01$\,kcal/mol for one binary), so the gate is a band: 50 poses and best
     energy $\le -12.5$\,kcal/mol. Negative test: flipping the gradient sign yields $-0.53$ (FAIL).
-  \item \textbf{LAMMPS} with a full neighbour list is bit-deterministic, so the gate compares step-0
-    energies at $10^{-6}$ relative tolerance and total energy after 500 NVE steps within $0.1\%$.
-    Negative test: a flipped force sign makes the simulation explode (FAIL).
   \item \textbf{Cholla} is bit-deterministic; the gate compares the full 3D snapshot field by field
     (relative $L_1 \le 10^{-9}$, relative max $\le 10^{-6}$) after 137 steps. Negative tests: a flipped
     energy-flux sign diverges (FAIL) and a $10^{-6}$ relative perturbation of one flux is caught
@@ -64,7 +63,7 @@ is an expert reference restricted to the same single file.
 \centering
 \footnotesize
 \caption{Real-application speedups (interleaved medians, all gated correct).
-  ``---'' = not run; ``fail'' = no candidate passed the gate within three repair iterations.
+  ``fail'' = no candidate passed the gate within three repair iterations.
   Clean repetitions per median: AutoDock-GPU model arms $5$ (idle GPU), except Gemini
   \emph{structural}, timed in a session with another user's job resident, whose baseline ratios
   reproduced the idle session's within $0.7\%$; AutoDock-GPU hand $7$ (idle GPU); Cholla $3$ of $5$
@@ -78,10 +77,6 @@ is an expert reference restricted to the same single file.
 \multirow{2}{*}{AutoDock-GPU}
   & baseline    & 0.990$\times$ & 1.037$\times$ & \multirow{2}{*}{\textbf{1.532}$\times$} \\
   & structural  & fail          & 1.001$\times$ & \\
-\midrule
-\multirow{2}{*}{LAMMPS}
-  & baseline    & 0.997$\times$ & \textbf{1.027}$\times$ & \multirow{2}{*}{1.023$\times$} \\
-  & structural  & ---           & 1.001$\times$ & \\
 \midrule
 \multirow{2}{*}{Cholla}
   & baseline    & \textbf{1.571}$\times$ & 1.504$\times$ & \multirow{2}{*}{1.468$\times$} \\
@@ -120,17 +115,3 @@ The three failures above share one cause: the model cannot see how its file is c
 a standalone translation unit or textually included, which symbols are already in scope, and which
 declarations other files depend on. This does not arise for self-contained benchmarks and is, in our
 experience, the dominant failure mode on real code.
-
-\paragraph{The human reference is not automatically correct.}
-Our first LAMMPS hand-tuned version constructed Kokkos \texttt{RandomAccess} views inside device code.
-The identical source passed the gate in one build (at $0.955\times$) and produced deterministically
-wrong physics in a rebuild (step-0 potential energy $+1.02\times10^{6}$ instead of $-7.25\times10^{6}$),
-which then ``measured'' $3.25\times$. It was withdrawn. We therefore gate \emph{every} build that is
-timed, not only the first, and treat implausible speedups as correctness alarms.
-
-\paragraph{The target must dominate end-to-end time.}
-With LAMMPS's GPU package driven by a single host core, the CUDA pair kernel is only $7.7$--$7.9\%$ of
-loop time (integration and ghost-atom exchange stay on the CPU), capping any kernel-level optimization
-at ${\sim}8\%$ by Amdahl's law. We switched to the Kokkos backend, where the whole timestep runs on the
-GPU ($94\%$ GPU-busy), before evaluating. A kernel can be $99\%$ of GPU time and still a small fraction
-of the application.
