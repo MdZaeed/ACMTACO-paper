@@ -14,7 +14,8 @@ single-kernel benchmarks, where the hot loop is obvious, and $7.7$--$11.5\%$ on 
 where it is not. Third, and most consequential for anyone building such a system, the models reliably
 find local, exact transformations---reciprocal reuse, removing redundant index arithmetic, read-only
 loads---and reliably miss cross-cutting restructuring: on AutoDock-GPU every candidate we obtained left in
-place the seven sequential block reductions whose fusion is worth $1.532\times$ by hand, while on Cholla the best model output ($1.571\times$) beat our hand-tuned reference.
+place the seven sequential block reductions whose fusion is worth $1.532\times$ by hand, while on Cholla every model output under the baseline prompt ($1.476$--$1.584\times$ over two samples
+per model) beat our hand-tuned reference.
 
 The failures were as informative as the speedups. Editing a single file inside a real program means the
 model cannot see how that file is compiled, and three of our application failures follow directly:

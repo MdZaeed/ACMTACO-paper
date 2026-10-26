@@ -91,7 +91,13 @@ is an expert reference restricted to the same single file.
 \end{table}
 
 \paragraph{Models find local, exact transformations; they do not restructure.}
-On Cholla the best model output (GPT-5, $1.571\times$) beats the hand reference ($1.468\times$): both
+% EDIT (2026-10-26): the profile-data ablation's second sample (Table~\ref{tab:profabl}) contains a
+% higher model result (Gemini, 1.584x) than this table; both samples are now stated.
+On Cholla the best model output in this table (GPT-5, $1.571\times$) beats the hand reference
+($1.468\times$), and so does every other baseline-prompt sample we have: the profile-data ablation of
+Section~\ref{sec:profabl} regenerated the same prompt for both models, giving $1.476\times$ (GPT-5)
+and $1.584\times$ (Gemini), timed in a later session in which this table's two candidates
+re-measured at $1.572\times$ and $1.504\times$. Both GPT-5 and the hand reference
 replace 18 double-precision divisions by 6 reciprocal multiplications, and GPT-5 additionally removes
 integer index arithmetic used only for a bounds check, reducing register pressure from 109 to 89
 registers per thread without spilling. On AutoDock-GPU, by contrast, the profitable change is a

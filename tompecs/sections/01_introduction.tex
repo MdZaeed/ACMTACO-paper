@@ -47,8 +47,9 @@ Our contributions are:
   we use, since neither output comparison nor the benchmark's own check can catch this class of edit.
 \item \textbf{An end-to-end evaluation on three production applications}---AutoDock-GPU, LAMMPS and
   Cholla (Section~\ref{sec:realapps})---with per-application correctness gates that we validate by
-  fault injection, and interleaved measurement on shared GPUs. The best model output reaches
-  $1.571\times$ on Cholla, beating our expert hand-tuned reference, while on AutoDock-GPU no model or
+  fault injection, and interleaved measurement on shared GPUs. On Cholla all four model outputs
+  under the baseline prompt (two independent samples per model, $1.476$--$1.584\times$) beat our
+  expert hand-tuned reference ($1.468\times$), while on AutoDock-GPU no model or
   prompt found the restructuring that is worth $1.532\times$ by hand.
 \item \textbf{A profile-data ablation} (Section~\ref{sec:profabl}) that isolates the contribution of
   PC-sampling and roofline data by removing it from an otherwise identical prompt. Profiling data is

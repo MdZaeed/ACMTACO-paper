@@ -12,8 +12,9 @@ exists to measure, reporting speedups of $1504\times$ and $2809\times$ while the
 its built-in verification remain unchanged; the constraint reduces both to honest results. Moving from
 kernels to applications---AutoDock-GPU, LAMMPS and Cholla, each gated by its own scientific output and
 measured under interleaved timing on shared GPUs---we find that models reliably discover local, exact
-transformations and reliably miss cross-cutting restructuring: the best model output reaches
-$1.571\times$ on Cholla, beating our expert hand-tuned reference, while on AutoDock-GPU no model or
+transformations and reliably miss cross-cutting restructuring: on Cholla all four model outputs under
+the baseline prompt (two independent samples per model, $1.48$--$1.58\times$) beat our expert
+hand-tuned reference ($1.47\times$), while on AutoDock-GPU no model or
 prompt variant found the reduction fusion worth $1.532\times$ by hand. Finally, an ablation that removes
 profiling data from an otherwise identical prompt shows that PC-sampling and roofline context is worth
 $7.7$--$11.5\%$ on the large application and nothing measurable on single-kernel benchmarks, indicating
