@@ -55,7 +55,9 @@ shows a difference that its own measurement noise does not already cover.
 \caption{Profile-data ablation: speedup against the unmodified application for the prompt without
   profile data (\texttt{co}) and with PC sampling + roofline (\texttt{pcrl}), and their ratio.
   A HeCBench pair is a tie when the arm-to-arm difference is smaller than that pair's repetition
-  spread; the entry gives the largest difference observed and the spread it sits inside.}
+  spread; the entry gives the largest difference observed and the spread it sits inside.
+  Application medians: Cholla over $4$ of $7$ repetitions (three excluded for drift with no foreign
+  job detected), AutoDock-GPU over $2$ of $7$ (five excluded for foreign jobs).}
 \label{tab:profabl}
 \setlength{\tabcolsep}{2pt}
 \begin{tabular}{@{}llrrr@{}}

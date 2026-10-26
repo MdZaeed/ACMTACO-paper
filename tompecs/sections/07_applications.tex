@@ -63,8 +63,12 @@ is an expert reference restricted to the same single file.
 \begin{table}[t]
 \centering
 \footnotesize
-\caption{Real-application speedups (interleaved medians, idle GPU, all gated correct).
-  ``---'' = not run; ``fail'' = no candidate passed the gate within three repair iterations.}
+\caption{Real-application speedups (interleaved medians, all gated correct).
+  ``---'' = not run; ``fail'' = no candidate passed the gate within three repair iterations.
+  Clean repetitions per median: AutoDock-GPU model arms $5$ (idle GPU), except Gemini
+  \emph{structural}, timed in a session with another user's job resident, whose baseline ratios
+  reproduced the idle session's within $0.7\%$; AutoDock-GPU hand $7$ (idle GPU); Cholla $3$ of $5$
+  (two excluded for a foreign job; spread $\le 0.12\%$).}
 \label{tab:realapps}
 \setlength{\tabcolsep}{3pt}
 \begin{tabular}{@{}llrrr@{}}
