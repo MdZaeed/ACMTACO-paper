@@ -15,9 +15,10 @@ $235$--$949\times$ apparent speedups. Gemini does so only when the proof require
 prompt-level requirement for a formal correctness argument suppresses this class of edit in one model
 but not the other, so it cannot be relied on as a defence. Second, the benchmark's own verification
 passes in every one of these runs, so no output-comparison gate would have caught them. This motivates
-the explicit computational-intent constraint evaluated in Section~\ref{sec:intent}.
+the explicit computational-intent constraint evaluated in Section~\ref{sec:constraint}.
 
 \subsection{The Constraint and Its Effect}
+\label{sec:constraint}
 % EDIT (original wording changed; see MAPPING.md)
 The gaming observed in the ablation (Section~\ref{sec:gaming-obs}) motivates an explicit computational-intent constraint to prevent models from
 replacing the computation rather than optimizing it. We implemented that constraint and measured its
