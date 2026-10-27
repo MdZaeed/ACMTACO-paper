@@ -24,40 +24,44 @@ the same code base, and all pairs use the same correctness gates and interleaved
 Section~\ref{sec:realapps}.
 
 \paragraph{Scoring.}
-HeCBench pairs are measured on a shared H100 node where per-repetition spread is sometimes larger than
-any plausible effect, so we score a pair as a \emph{tie} when $|\mathrm{pcrl}/\mathrm{co}-1|$ is smaller
-than the largest repetition spread measured for that pair---that is, when the difference between the
-arms does not exceed its own measurement noise. Two applications (\texttt{boxfilter},
-\texttt{ccsd-trpdrv}) are excluded because the \emph{unmodified} program exceeds our $600$\,s per-run
-cap on that node, and one (\texttt{background-subtract}, GPT-5) because the \texttt{code\_only} arm
-produced no correct candidate at all, which we report under correctness rather than speed. One
-caveat carries through the whole benchmark half of this comparison: on this node the benchmarks' own
-verification gives no usable verdict for the \emph{unmodified} program---five of nine report FAIL and
-the rest report nothing---so a candidate's verdict is informative only where it differs from the
-pristine one (Section~\ref{sec:limits}).
+% EDIT (2026-10-27): HeCBench half re-timed. The first timing (2026-09-22) ran while a driver change on
+% the H100 node made CUDA 12.x binaries print wrong output and run 20-300x slow (real-applications
+% report, sec. 14). Same candidates, rebuilt with CUDA 13.3.1 and re-timed on the same node on
+% 2026-10-26 (cluster: ~/latest_opal/rerun_cu133/prof_ablation_cu133.csv); chemv excluded (Section 8.2).
+HeCBench pairs are measured on a shared H100 node, five repetitions per arm, all five clean for every
+pair. Per-repetition spread on this node ranges from $0.1\%$ to $37.4\%$, so we score a pair as a
+\emph{tie} when $|\mathrm{pcrl}/\mathrm{co}-1|$ is smaller than the largest repetition spread
+measured for that pair---that is, when the difference between the arms does not exceed its own
+measurement noise. Of the twenty pairs, one (\texttt{background-subtract}, GPT-5) cannot be scored
+because the \texttt{code\_only} arm produced no correct candidate at all, which we report under
+correctness rather than speed. Every unmodified benchmark that has a built-in check prints PASS, and
+so does every candidate.
 
 \paragraph{Result.}
-Profiling data helps on the large real application and makes no measurable difference on the small
-benchmarks (Table~\ref{tab:profabl}). On Cholla both models are clearly faster with the profile
-($+11.5\%$ for GPT-5, $+7.7\%$ for Gemini), and a second, independently generated \texttt{pcrl} sample
-keeps both on the same side of the comparison (GPT-5 $1.187$, Gemini $1.023$ relative to
-\texttt{code\_only}), although the Gemini replicate is much weaker than its first sample. On
-AutoDock-GPU both arms reach the same ${\sim}1.03\times$. All seventeen scored HeCBench pairs are ties
-by the rule above: the largest arm-to-arm difference is $7.8\%$ for GPT-5 (\texttt{adv}, inside a
-$31.8\%$ spread) and $33.2\%$ for Gemini (\texttt{background-subtract}, inside a $147.6\%$ spread), and
-the eight pairs whose spread is under $5\%$ all land between $0.998$ and $1.003$. Not one benchmark
-shows a difference that its own measurement noise does not already cover.
-
+Profiling data helps consistently on the large real application; on the small benchmarks it changes
+individual results by as much as on the application, but in both directions, with no net gain
+(Tables~\ref{tab:profabl} and~\ref{tab:profablhec}). On Cholla both models are clearly faster with
+the profile ($+11.5\%$ for GPT-5, $+7.7\%$ for Gemini), and a second, independently generated
+\texttt{pcrl} sample keeps both on the same side of the comparison (GPT-5 $1.187$, Gemini $1.023$
+relative to \texttt{code\_only}), although the Gemini replicate is much weaker than its first sample.
+On AutoDock-GPU both arms reach the same ${\sim}1.03\times$. Of the nineteen scored HeCBench pairs,
+nine are ties by the rule above, six favour the profile and four favour its absence. Counting only
+differences above $5\%$, four favour the profile (\texttt{convolutionSeparable} $+13.4\%$ and
+\texttt{bincount} $+8.4\%$ for GPT-5; \texttt{amgmk} $+13.5\%$ and \texttt{convolutionSeparable}
+$+5.3\%$ for Gemini) and two go against it (Gemini \texttt{boxfilter} $-15.3\%$ at a $0.3\%$ spread,
+and Gemini \texttt{atomicSystemWide} $-19.9\%$ at a $16.3\%$ spread). The geometric mean of
+$\mathrm{pcrl}/\mathrm{co}$ is $1.003$ over the nine GPT-5 pairs and $0.979$ over the ten Gemini
+pairs. Each pair is a single generation per arm (Section~\ref{sec:limits}), so an individual
+benchmark's sign may be sampling variance; what the benchmarks do not show is a consistent direction.
 
 \begin{table}[t]
 \centering
 \footnotesize
-\caption{Profile-data ablation: speedup against the unmodified application for the prompt without
-  profile data (\texttt{co}) and with PC sampling + roofline (\texttt{pcrl}), and their ratio.
-  A HeCBench pair is a tie when the arm-to-arm difference is smaller than that pair's repetition
-  spread; the entry gives the largest difference observed and the spread it sits inside.
-  Application medians: Cholla over $4$ of $7$ repetitions (three excluded for drift with no foreign
-  job detected), AutoDock-GPU over $2$ of $7$ (five excluded for foreign jobs).}
+\caption{Profile-data ablation on the applications: speedup against the unmodified application for
+  the prompt without profile data (\texttt{co}) and with PC sampling + roofline (\texttt{pcrl}), and
+  their ratio. Application medians: Cholla over $4$ of $7$ repetitions (three excluded for drift with
+  no foreign job detected), AutoDock-GPU over $2$ of $7$ (five excluded for foreign jobs). The
+  HeCBench rows give the geometric mean of the per-pair ratios in Table~\ref{tab:profablhec}.}
 \label{tab:profabl}
 \setlength{\tabcolsep}{2pt}
 \begin{tabular}{@{}llrrr@{}}
@@ -72,27 +76,64 @@ shows a difference that its own measurement noise does not already cover.
   & GPT-5  & 1.030$\times$ & 1.031$\times$ & 1.001 \\
   & Gemini & 1.035$\times$ & 1.035$\times$ & 1.000 \\
 \midrule
-HeCBench (8 pairs) & GPT-5  & \multicolumn{3}{c}{all ties} \\
-HeCBench (9 pairs) & Gemini & \multicolumn{3}{c}{all ties} \\
+HeCBench (9 pairs, geomean)  & GPT-5  & & & 1.003 \\
+HeCBench (10 pairs, geomean) & Gemini & & & 0.979 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{Profile-data ablation on HeCBench (H100, CUDA 13.3.1, medians of $5$ clean repetitions per
+  arm). Speedups are against the unmodified benchmark; \emph{spr.} is the largest repetition spread of
+  the pair, in percent. A ratio in bold differs from $1$ by more than its pair's spread; the others are
+  ties. --- = no correct \texttt{code\_only} candidate.}
+\label{tab:profablhec}
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}lrrrrcrrrr@{}}
+\toprule
+ & \multicolumn{4}{c}{\textbf{GPT-5}} && \multicolumn{4}{c}{\textbf{Gemini 3.1 Pro}} \\
+\cmidrule(lr){2-5}\cmidrule(lr){7-10}
+\textbf{Benchmark} & \textbf{co} & \textbf{pcrl} & \textbf{pcrl/co} & \textbf{spr.} &&
+  \textbf{co} & \textbf{pcrl} & \textbf{pcrl/co} & \textbf{spr.} \\
+\midrule
+\texttt{adv}                  & 0.997 & 0.999 & 1.002 & 19.1 && 1.002 & 0.994 & 0.992 & 14.5 \\
+\texttt{amgmk}                & 0.979 & 0.989 & 1.010 & 11.8 && 0.878 & 0.996 & \textbf{1.135} & 5.4 \\
+\texttt{atomicSystemWide}     & 1.075 & 0.876 & 0.815 & 19.5 && 1.010 & 0.809 & \textbf{0.801} & 16.3 \\
+\texttt{background-subtract}  & ---   & 1.638 & ---   & 16.4 && 1.574 & 1.581 & 1.004 & 11.1 \\
+\texttt{bincount}             & 1.000 & 1.084 & \textbf{1.084} & 0.1 && 1.359 & 1.364 & \textbf{1.004} & 0.1 \\
+\texttt{blockAccess}          & 1.021 & 1.004 & \textbf{0.984} & 0.9 && 1.000 & 1.003 & 1.004 & 0.9 \\
+\texttt{boxfilter}            & 1.079 & 1.113 & \textbf{1.032} & 0.2 && 1.796 & 1.521 & \textbf{0.847} & 0.3 \\
+\texttt{ccsd-trpdrv}          & 1.006 & 1.005 & 0.999 & 31.6 && 1.030 & 1.019 & 0.989 & 37.4 \\
+\texttt{concat}               & 0.937 & 0.933 & \textbf{0.995} & 0.1 && 1.350 & 1.350 & 1.000 & 0.4 \\
+\texttt{convolutionSeparable} & 0.999 & 1.133 & \textbf{1.134} & 1.1 && 1.084 & 1.141 & \textbf{1.053} & 0.8 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \paragraph{Correctness, not only speed.}
-Two HeCBench pairs favour the profile arm on correctness rather than time. On
-\texttt{background-subtract}, GPT-5 without profile data failed the application's own output check in
+% EDIT (2026-10-27): the atomicSystemWide point is gone (its code_only FAIL was a node artifact; on the
+% re-run no arm prints a verdict). background-subtract re-checked on 2026-10-26 with CUDA 13.3.1: the
+% unmodified program passes (max error 0) and all three code_only candidates fail (max error 93).
+One HeCBench pair favours the profile arm on correctness rather than time. On
+\texttt{background-subtract}, GPT-5 without profile data failed the benchmark's own output check in
 all three repair iterations and produced no usable candidate, while the \texttt{pcrl} arm produced a
-correct one; on \texttt{atomicSystemWide}, the \texttt{code\_only} candidate fails verification and the
-\texttt{pcrl} candidate does not.
+correct one ($1.638\times$). Because these candidates were generated on the H100 node while it was
+faulty, we rebuilt all three rejected candidates with the working toolchain: the unmodified program
+passes with zero error, and each candidate still fails, with a maximum pixel error of $93$.
 
 \paragraph{Interpretation.}
 The pattern is consistent with the workloads rather than with the models. A HeCBench kernel is a few
 hundred lines with one obvious hot loop, and the profile tells a model little it cannot infer from the
-source. Cholla's HLLC solver is 307 lines inside a 21k-line CUDA application whose cost is spread over
+source: it changes which edit a model makes, sometimes by more than $10\%$ either way, but it does not
+make the edit better on average. Cholla's HLLC solver is 307 lines inside a 21k-line CUDA application whose cost is spread over
 several kernels; there the profile identifies both the kernel worth editing and the reason it is slow
 (latency-bound at $19.7\%$ DRAM and $40.4\%$ SM throughput, occupancy $23\%$ limited by 109 registers
 per thread). We therefore expect profile data to pay off in proportion to how hard the bottleneck is to
-locate from source alone---which is precisely the regime real applications occupy.
+locate from source alone---which is precisely the regime real applications occupy. With one
+application showing the gain, this is a hypothesis rather than a measured law
+(Section~\ref{sec:limits}).
 A separate question is what happens when that data is not merely supplied but \emph{interpreted} into
 named remedies before the model sees it; Section~\ref{sec:guidvar} measures that arm.
 
