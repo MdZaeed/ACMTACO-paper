@@ -43,13 +43,12 @@ with the measurement floor above, this means an effect below roughly $5\%$ in a 
 treated as unresolved rather than small.
 
 \paragraph{Coverage of the profile-data ablation.}
-The comparison in Section~\ref{sec:profabl} spans 26 (application, model) pairs but scores 21. Two
-benchmarks (\texttt{boxfilter}, \texttt{ccsd-trpdrv}) could not be timed on the available node because
-the \emph{unmodified} programs exceed our $600$\,s per-run cap, costing four pairs, and
-\texttt{background-subtract} under GPT-5 yields no \texttt{code\_only} candidate at all. The
-denominator is therefore small, and---more importantly---the entire positive result rests on a single
-application, Cholla, with two models. The seventeen benchmark pairs establish only that the effect is
-absent there, not that it generalizes to other large applications.
+% EDIT (2026-10-27): counts from the CUDA 13.3.1 re-timing; boxfilter and ccsd-trpdrv now timed.
+The comparison in Section~\ref{sec:profabl} spans 24 (application, model) pairs and scores 23:
+\texttt{background-subtract} under GPT-5 yields no correct \texttt{code\_only} candidate. The positive
+result rests on a single application, Cholla, with two models; the nineteen benchmark pairs show that
+profile data moves individual results in both directions there with no net gain, not that the gain on
+Cholla generalizes to other large applications.
 
 \subsection{Construct Validity}
 \paragraph{Correctness gates are empirical, not proofs.}
@@ -68,20 +67,25 @@ catches the large cases we observed ($1504\times$, $2809\times$, $235$--$949\tim
 gaming transformation yielding, say, $1.5\times$ would not be flagged automatically, and we cannot rule
 out such cases in the reported numbers.
 
-\paragraph{Benchmark verification was unusable as a gate on that node.}
-For the HeCBench part of the profile-data ablation, not one of the nine measured benchmarks gave a
-usable verdict for the \emph{unmodified} program on the H100 node: five (\texttt{adv},
-\texttt{background-subtract}, \texttt{chemv}, \texttt{concat}, \texttt{convolutionSeparable}) print FAIL
-from their own built-in check, and the other four print no verdict at all. In \texttt{chemv} the cause
-is structural rather than numerical: its timing loop launches the two kernels $1000$ times accumulating
-into the same output buffer without re-initializing it, then compares the result against a single
-application of the CPU reference, so the check cannot pass for the unmodified program. A candidate's verdict is therefore informative only where it differs from
-the pristine one, as on \texttt{atomicSystemWide}, where the unmodified program is silent and the
-\texttt{code\_only} candidate reports FAIL. Correctness for the rest rests on the pipeline's
-generation-time check and on our inspection of the diffs, which is weaker than the gates we built for
-the applications. It is also a caution about the benchmark suites these systems are usually evaluated
-on: a built-in PASS/FAIL is not automatically a correctness oracle on hardware the benchmark was not
-tuned for.
+\paragraph{A node fault invalidated the first benchmark timing.}
+% EDIT (2026-10-27): replaces "Benchmark verification was unusable as a gate on that node". The FAIL
+% verdicts it described were caused by the driver change (real-applications report, sec. 14); on the
+% CUDA 13.3.1 re-timing every unmodified benchmark with a check prints PASS.
+The HeCBench half of the profile-data ablation was first timed after a driver update on the shared
+H100 node, which made binaries built with CUDA 12.x print wrong output and run $20$--$300\times$
+slower without failing. Unmodified benchmarks then printed FAIL from their own checks, and two
+exceeded our $600$\,s per-run cap. We detected this only by comparing against earlier measurements of
+the same binaries, discarded that timing, and re-timed the same candidates rebuilt with CUDA 13.3.1;
+Section~\ref{sec:profabl} reports only the re-timing. The candidates themselves were generated on the
+faulty node, so a candidate rejected by the generation-time check could have been rejected wrongly; the
+one case where this decides a result (\texttt{background-subtract}, GPT-5) we re-checked with the
+working toolchain, and the rejection stands. A benchmark's built-in check is also not always an oracle:
+\texttt{chemv}'s timing loop launches its kernels $1000$ times, accumulating into the same output
+buffer, and then compares against a single application of the CPU reference, so the check cannot pass
+for the unmodified program; we therefore exclude it (Section~\ref{sec:guidvar}). For the three
+benchmarks that print no verdict (\texttt{amgmk}, \texttt{atomicSystemWide}, \texttt{bincount}),
+correctness rests on the pipeline's generation-time check and on our inspection of the diffs, which is
+weaker than the gates we built for the applications.
 
 \paragraph{Scope of the objective.}
 We optimize execution time of a single GPU kernel file under a correctness gate. We do not study
@@ -91,7 +95,8 @@ the generated code---all of which matter for production use of these application
 \subsection{External Validity}
 \paragraph{Hardware and software scope.}
 Results cover NVIDIA GPUs only: H100 PCIe (sm\_90) for the benchmark studies and GH200 (sm\_90) for
-the applications, with CUDA 12.6.3. Conclusions may not transfer across architectures, and we did not test that
+the applications, with CUDA 12.6.3 (13.3.1 for the re-timed half of the profile-data ablation).
+Conclusions may not transfer across architectures, and we did not test that
 directly: every prompt variant was evaluated on one architecture per study, so an effect that depends
 on register file size, SM count or cache hierarchy would be invisible to us. The profiles supplied for
 the six original ablation benchmarks were themselves collected on an A100 and used on an H100. We use two proprietary models whose weights and versions we do not control; the

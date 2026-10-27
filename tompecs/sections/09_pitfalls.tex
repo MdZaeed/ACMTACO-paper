@@ -18,8 +18,11 @@ the tooling defects and the general contrast between benchmarks and applications
 \midrule
 Edits that delete the measured work while preserving output and the built-in check
   & \ref{sec:intent} & Semantic-preservation constraint; any speedup above $5\times$ is a correctness alarm and its diff is inspected \\
-Built-in PASS/FAIL that gives no usable verdict on the unmodified program
-  & \ref{sec:limits} & A candidate's verdict is informative only where it differs from the pristine one; explicit gates for applications \\
+% EDIT (2026-10-27): split into the node fault and the unusable check (Section 10).
+Driver update on a shared node: wrong output and inflated times, with no error
+  & \ref{sec:limits} & Re-time the unmodified program at the start of every session and compare with earlier measurements of the same binary \\
+Built-in check that cannot pass for the unmodified program, or prints no verdict
+  & \ref{sec:limits} & Run the unmodified program through the check first; exclude benchmarks whose check cannot pass; explicit gates for applications \\
 Drift between sessions on shared nodes (up to $49\%$ on identical code)
   & \ref{sec:timing} & Build once, interleave arms, wait for an idle GPU, log foreign GPU processes per repetition, require repetitions to agree \\
 Application output with no built-in check, or not reproducible run to run
@@ -91,7 +94,9 @@ Linker cause lines filtered out & Repair prompt contained no actionable error \\
 The benchmark results above understate how much prompt design matters, because single-kernel benchmarks
 hide two of its effects. They cannot expose compilation-context failures, since each benchmark is a
 self-contained translation unit; and they make profiling data look worthless
-(Section~\ref{sec:profabl}), since the hot loop of a $200$-line benchmark is obvious from the source.
+(Section~\ref{sec:profabl}): on benchmarks it moves individual results in both directions with no net
+gain, since the hot loop of a $200$-line benchmark is obvious from the source.
+% EDIT (2026-10-27): "worthless" now qualified by the re-timed result.
 Both effects reappear on the production applications of Section~\ref{sec:realapps}, which is the
 strongest argument we can offer against drawing conclusions about such systems from benchmark suites
 alone.
