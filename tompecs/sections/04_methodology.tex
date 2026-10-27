@@ -14,10 +14,11 @@ end-to-end study on production applications.
 The prompt ablation uses six HeCBench \cite{jin2023hecbench} CUDA benchmarks---\texttt{atan2},
 \texttt{bitonic-sort}, \texttt{md5hash}, \texttt{accuracy}, \texttt{sobol} and
 \texttt{shmembench}---chosen to span memory-bound and compute-bound behaviour and to include kernels
-with built-in verification. The profile-data ablation (Section~\ref{sec:profabl}) uses a further eleven
+with built-in verification. The profile-data ablation (Section~\ref{sec:profabl}) uses a further ten
 HeCBench applications: \texttt{adv}, \texttt{amgmk}, \texttt{atomicSystemWide},
 \texttt{background-subtract}, \texttt{bincount}, \texttt{blockAccess}, \texttt{boxfilter},
-\texttt{ccsd-trpdrv}, \texttt{chemv}, \texttt{concat} and \texttt{convolutionSeparable}.
+\texttt{ccsd-trpdrv}, \texttt{concat} and \texttt{convolutionSeparable}.
+% EDIT (2026-10-27): chemv dropped (its built-in check cannot pass; see Section 8.2).
 
 \paragraph{Applications.}
 The end-to-end study uses two production codes: AutoDock-GPU (molecular docking, CUDA) and Cholla
@@ -39,10 +40,12 @@ studies appear together, since they are not directly comparable.
 The prompt ablation, the semantic-preservation comparison and the HeCBench part of the profile-data
 ablation are timed on an NVIDIA H100 PCIe (sm\_90). The application study, the real-application part
 of the profile-data ablation and the prescriptive-guidance comparison of Section~\ref{sec:guidvar}
-are timed on an NVIDIA GH200 (sm\_90). Both nodes use CUDA 12.6.3. One
+are timed on an NVIDIA GH200 (sm\_90). Both nodes use CUDA 12.6.3, except the HeCBench part of the
+profile-data ablation, which we rebuilt and re-timed with CUDA 13.3.1 after a driver update on the
+H100 node made binaries built with CUDA 12.x produce wrong output there. One
 mismatch is worth stating: the profiles supplied in the prompt for the six original ablation benchmarks
 were collected on an A100 ($108$ SMs) rather than on the H100 ($114$ SMs) they were then timed on; the
-eleven profile-data-ablation benchmarks use native H100 profiles. All nodes are shared with other
+ten profile-data-ablation benchmarks use native H100 profiles. All nodes are shared with other
 users, which motivates the measurement protocol of Section~\ref{sec:timing}: build once, interleave
 variants within one session, wait for an idle GPU, and log competing GPU processes at the start and end
 of every repetition so that contaminated repetitions can be excluded rather than averaged in.

@@ -55,8 +55,12 @@ per-iteration \texttt{atomicAdd\_system(\ldots,\,10)} is still present in the ge
 caveats apply to the table. The unconstrained and relaxed arms were generated and measured in the same
 interleaved session, but they differ in more than the constraint, since the relaxed prompt also lifts
 the syntactic prohibitions; the arms that isolate the constraint (original prohibitions plus the
-semantic-preservation block) come from a later session on a different node, where this benchmark's
-repetition spread exceeds $100\%$. The comparison we draw is therefore categorical---gaming versus no
+semantic-preservation block) were timed in a later session on the same node, rebuilt with a newer
+CUDA toolkit (Section~\ref{sec:profabl}), and their repetition spread on this benchmark is $16$--$20\%$.
+% EDIT (2026-10-27): "orig. rules" values from the CUDA 13.3.1 re-timing (prof_ablation_cu133.csv);
+% the old 1.02/0.90 came from the faulty-node timing. code_only column added so the table shows all
+% three constrained arms; all four constrained candidates re-read: the per-iteration atomics remain.
+The comparison we draw is therefore categorical---gaming versus no
 gaming, confirmed by reading the generated source---rather than a precise ratio.
 
 \begin{table}[t]
@@ -68,14 +72,16 @@ gaming, confirmed by reading the generated source---rather than a precise ratio.
   output and the built-in check are unchanged. The constrained arms all retain the per-iteration
   atomic; their exact ratios are not comparable across sessions (see text).}
 \label{tab:intent}
-\begin{tabular}{@{}lrrr@{}}
+\begin{tabular}{@{}lrrrr@{}}
 \toprule
- & \textbf{No} & \multicolumn{2}{c}{\textbf{With constraint}} \\
+ & \textbf{No} & \multicolumn{3}{c}{\textbf{With constraint}} \\
+\cmidrule(lr){3-5}
+ & & \multicolumn{2}{c}{\textbf{orig.\ rules}} & \\
 \cmidrule(lr){3-4}
-\textbf{Model} & \textbf{constraint} & \textbf{orig.\ rules} & \textbf{relaxed} \\
+\textbf{Model} & \textbf{constraint} & \textbf{pcrl} & \textbf{code\_only} & \textbf{relaxed} \\
 \midrule
-GPT-5          & 1504$\times^\dagger$ & 1.02$\times$ & 0.94$\times$ \\
-Gemini 3.1 Pro & 2809$\times^\dagger$ & 0.90$\times$ & 0.71$\times$ \\
+GPT-5          & 1504$\times^\dagger$ & 0.88$\times$ & 1.08$\times$ & 0.94$\times$ \\
+Gemini 3.1 Pro & 2809$\times^\dagger$ & 0.81$\times$ & 1.01$\times$ & 0.71$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
