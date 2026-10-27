@@ -32,9 +32,11 @@ $125\%$ higher speedup for the interpreted arm than for raw metrics. Both of its
 data; the comparison is \emph{interpreted} against \emph{raw}. We ask a narrower and, we argue, prior
 question: does profiling data help \emph{at all}, relative to the same prompt without it?
 Section~\ref{sec:profabl} answers it by removing the data while holding every other prompt component
-fixed, and finds that the answer depends on the workload---no measurable effect on single-kernel
-benchmarks, but a clear effect on a large application where the bottleneck is not apparent from the
-source. Section~\ref{sec:guidvar} then evaluates KernelPro's question on our benchmarks, and finds
+fixed, and finds that the answer depends on the workload---no net effect on single-kernel
+benchmarks, where the data moves individual results in both directions, but a consistent gain on a
+large application where the bottleneck is not apparent from the source.
+% EDIT (2026-10-27): "no measurable effect" replaced after the re-timing (Section 8.1).
+Section~\ref{sec:guidvar} then evaluates KernelPro's question on our benchmarks, and finds
 that interpretation widens the distribution of outcomes rather than shifting its centre.
 
 \paragraph{Autotuning and search.}

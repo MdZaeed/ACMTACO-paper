@@ -53,7 +53,9 @@ Our contributions are:
   prompt found the restructuring that is worth $1.532\times$ by hand.
 \item \textbf{A profile-data ablation} (Section~\ref{sec:profabl}) that isolates the contribution of
   PC-sampling and roofline data by removing it from an otherwise identical prompt. Profiling data is
-  worth $7.7$--$11.5\%$ on the large application and nothing measurable on single-kernel benchmarks,
+  worth $7.7$--$11.5\%$ on the large application; on single-kernel benchmarks it moves individual
+  results in both directions with no net gain (geometric mean $0.98$--$1.00$ per model),
+  % EDIT (2026-10-27): from the CUDA 13.3.1 re-timing (Section 8.1).
   which suggests its value scales with how hard the bottleneck is to locate from source alone.
 \item \textbf{A measurement of what happens when profiling data is made prescriptive}
   (Section~\ref{sec:guidvar}). Converting metrics into a checklist of named remedies produces both our

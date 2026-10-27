@@ -9,9 +9,11 @@ Removing the instructions produces the slowest results more often than any other
 what separates an honest result from a benchmark-gaming one: without it, both models delete the
 computation a benchmark exists to measure and report speedups of three orders of magnitude that survive
 the benchmark's own correctness check. Second, profiling data earns its place in the prompt in
-proportion to how hard the bottleneck is to see from the source. It is worth nothing measurable on
-single-kernel benchmarks, where the hot loop is obvious, and $7.7$--$11.5\%$ on a 21k-line application
-where it is not. Third, and most consequential for anyone building such a system, the models reliably
+proportion to how hard the bottleneck is to see from the source. On single-kernel benchmarks, where the
+hot loop is obvious, it moves individual results in both directions with no net gain; on a 21k-line
+application where it is not, it is worth $7.7$--$11.5\%$ to both models.
+% EDIT (2026-10-27): benchmark half restated after the re-timing (Section 8.1).
+Third, and most consequential for anyone building such a system, the models reliably
 find local, exact transformations---reciprocal reuse, removing redundant index arithmetic, read-only
 loads---and reliably miss cross-cutting restructuring: on AutoDock-GPU every candidate we obtained left in
 place the seven sequential block reductions whose fusion is worth $1.532\times$ by hand, while on Cholla every model output under the baseline prompt ($1.476$--$1.584\times$ over two samples
