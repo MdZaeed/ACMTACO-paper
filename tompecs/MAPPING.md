@@ -128,5 +128,11 @@ in `main.tex`.
 - **10.2**: no valid replicate of the guidance comparison (the round-2 timing ran on the broken node).
 - **HeCBench half of the profile-data ablation re-timed** on illyad with CUDA 13.3.1
   (`~/latest_opal/rerun_cu133/` on the cluster; the original 2026-09-22 timing ran during the
-  driver fault of report sec. 14).
+  driver fault of report sec. 14). Written in on 2026-10-27: 8.1 rewritten with a per-benchmark table
+  (`tab:profablhec`): 19 scored pairs, 9 ties, 6 for and 4 against the profile, geomean 1.003 (GPT-5)
+  and 0.979 (Gemini), so "nothing measurable on benchmarks" became "both directions, no net gain" in
+  the abstract, intro, related work, 9.3 and conclusion. The `atomicSystemWide` correctness point is
+  dropped (node artifact); `background-subtract`/GPT-5 was re-checked on CUDA 13.3.1 and stands.
+  Table `tab:intent` now shows both original-rules arms (pcrl 0.88/0.81, code_only 1.08/1.01). 10.3's
+  "verification unusable" paragraph is replaced by one on the node fault and `chemv`'s check.
 - Cross-references repaired (new labels `sec:timing`, `sec:constraint`); Related Work deduplicated.
