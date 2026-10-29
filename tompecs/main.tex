@@ -3,11 +3,18 @@
 %% `review` is the submission/review-copy option; remove it for the camera-ready version.
 %% Review type (single- or double-blind) is NOT confirmed: if double-blind, add the `anonymous`
 %% option and wrap the acknowledgments in \begin{anonsuppress}...\end{anonsuppress}.
-%% Built from the earlier ACL-style sections by tools/assemble.py; see MAPPING.md.
+%% Built from the earlier ACL-style sections by tools/assemble.py, then restructured on 2026-10-29
+%% (methodology / setup / results / discussion / related work / conclusion); see MAPPING.md.
 \documentclass[acmsmall,review]{acmart}
 
 \usepackage{multirow}
 \usepackage{xspace}
+\usepackage{amssymb}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc}
+%% Tick and cross for the prompt-variant table.
+\newcommand{\cmark}{\checkmark}
+\newcommand{\xmark}{$\times$}
 \newcommand{\tzi}[1]{\textcolor{red}{FIX: #1}\xspace}
 %% Marks a statement that still needs evidence or an author decision. Remove every use before submitting.
 \newcommand{\needcheck}[1]{\textcolor{blue}{[CHECK: #1]}\xspace}
@@ -93,16 +100,12 @@ performance evaluation methodology, benchmark validity, measurement on shared sy
 \maketitle
 
 \input{sections/01_introduction}
-\input{sections/02_related}
-\input{sections/03_subject}
-\input{sections/04_methodology}
-\input{sections/05_prompt_study}
-\input{sections/06_gaming}
-\input{sections/07_applications}
-\input{sections/08_evidence}
-\input{sections/09_pitfalls}
-\input{sections/10_validity}
-\input{sections/11_conclusion}
+\input{sections/02_methodology}
+\input{sections/03_setup}
+\input{sections/04_results}
+\input{sections/05_discussion}
+\input{sections/06_related}
+\input{sections/07_conclusion}
 
 %% TODO: acknowledgments (move inside anonsuppress if the review is double-blind).
 \begin{acks}

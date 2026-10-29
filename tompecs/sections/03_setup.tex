@@ -1,0 +1,132 @@
+\section{Experimental Setup}
+\label{sec:setup}
+% EDIT (2026-10-29): new section built from the old 4.1--4.2 (workloads, models, hardware), 7.1
+% (applications table) and the setup paragraphs of Sections 5--8; one subsection per experiment, in
+% the order the experiments were designed. The measurement protocol is stated in Section 2 and only
+% referenced here.
+We ran five experiments on the loop of Section~\ref{sec:method}, designed in the order they are
+numbered: a prompt-component ablation on single-kernel benchmarks (E1), a test of the
+semantic-preservation constraint on the benchmark that was gamed (E2), the end-to-end study on two
+production applications (E3), an ablation that removes the profiling data (E4), and a comparison of
+raw against interpreted profiling data (E5). This section states the workloads, models and hardware
+they share and then defines each experiment.
+
+\subsection{Benchmarks and Applications}
+\label{sec:explanation}
+\paragraph{Benchmarks.}
+The prompt-component ablation uses six HeCBench \cite{jin2023hecbench} CUDA benchmarks---\texttt{atan2},
+\texttt{bitonic-sort}, \texttt{md5hash}, \texttt{accuracy}, \texttt{sobol} and
+\texttt{shmembench}---chosen to span memory-bound (\texttt{shmembench}) and compute-bound
+(\texttt{bitonic-sort}, \texttt{md5hash}, \texttt{atan2}) behaviour and to include kernels with
+built-in verification. The later benchmark experiments use a further ten HeCBench programs:
+\texttt{adv}, \texttt{amgmk}, \texttt{atomicSystemWide}, \texttt{background-subtract},
+\texttt{bincount}, \texttt{blockAccess}, \texttt{boxfilter}, \texttt{ccsd-trpdrv}, \texttt{concat} and
+\texttt{convolutionSeparable}. An eleventh, \texttt{chemv}, was run but is excluded from every table
+because its built-in check cannot pass for the unmodified program (Section~\ref{sec:guidvar}).
+
+\paragraph{Applications.}
+The end-to-end study uses two production codes: AutoDock-GPU (molecular docking, CUDA) and Cholla
+(astrophysical hydrodynamics, CUDA). Each is built from its own build system with its own inputs and
+validated by the gate of Section~\ref{sec:correctness}. For each, we profiled the whole application
+with Nsight Systems and Nsight Compute, selected the source file containing the kernel that dominates
+GPU time---after confirming that this kernel also dominates \emph{application} time---and gave the
+pipeline that single file to optimize, exactly as for a benchmark (Table~\ref{tab:apps}).
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{Production applications, the file given to the pipeline, and the share of GPU time held by
+  the target kernel.}
+\label{tab:apps}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llr@{}}
+\toprule
+\textbf{Application} & \textbf{Target file (hot kernel)} & \textbf{Share} \\
+\midrule
+AutoDock-GPU & \texttt{calcMergeEneGra.cu} & 98.7\% \\
+Cholla & \texttt{hllc\_cuda.cu} & 56.0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Models}
+\label{sec:models}
+% EDIT (2026-10-29): the reason for the model change is the author's statement (review of
+% 2026-10-29); no document in the experiments repository records the date it was disabled.
+The prompt-component ablation (E1) uses GPT-5 and Gemini~2.5~Pro. Gemini~2.5~Pro was disabled on the
+API we use after that study, so the four later experiments use its successor, Gemini~3.1~Pro, together
+with GPT-5. We note the change wherever numbers from E1 appear next to numbers from the later
+experiments, since the two Gemini versions are not directly comparable.
+% Earlier exploratory runs used llama3.1:70B, llama2:7B and qwen-coder:14B. They are not in any
+% reported table; add a paragraph here if you want to include those numbers.
+
+\subsection{Hardware and Software}
+\label{sec:hardware}
+E1, E2 and the benchmark half of E4 are timed on an NVIDIA H100 PCIe (sm\_90); E3, the application
+half of E4 and E5 are timed on an NVIDIA GH200 (sm\_90). Both nodes use CUDA 12.6.3, except the
+benchmark half of E4, which was rebuilt and re-timed with CUDA 13.3.1 after a driver update on the H100
+node made binaries built with CUDA 12.x produce wrong output there (Section~\ref{sec:limits}). The
+profiles supplied in the prompt for the six E1 benchmarks were collected on an A100 ($108$ SMs) rather
+than on the H100 ($114$ SMs) they were then timed on; the ten later benchmarks use native H100
+profiles, and the Cholla profile was collected on the GH200 on which it was measured. Both nodes are
+shared with other users, which is why every timing follows the protocol of Section~\ref{sec:timing}.
+
+\subsection{Experiment 1: Prompt-Component Ablation}
+\label{sec:setup-e1}
+E1 answers RQ1. It runs the six variants of Section~\ref{sec:ablation} with both models on the six
+benchmarks: $2 \times 6 \times 6 = 72$ runs, each with up to three repair iterations. Every run
+supplies PC-sampling and roofline summaries, so the variants differ only in the instructions. We record
+for each run whether it produced a valid candidate, at which iteration, and the candidate's runtime,
+which for this experiment is the in-loop ten-run average (Section~\ref{sec:timing}); a run is
+\emph{valid} when its candidate built and passed the benchmark's check. Baseline runtimes of the
+unmodified program were recorded for \texttt{bitonic-sort}, \texttt{sobol} and \texttt{shmembench},
+so speedups are stated for those three and the other three benchmarks compare variants with one
+another only.
+
+\subsection{Experiment 2: The Semantic-Preservation Constraint}
+\label{sec:setup-e2}
+E2 answers RQ2 on \texttt{atomicSystemWide}, the benchmark both models gamed. It compares the
+unconstrained baseline prompt against three prompts that carry the semantic-preservation block of
+Section~\ref{sec:constraint}: the relaxed \emph{structural} prompt, and the \texttt{pcrl} and
+\texttt{code\_only} prompts, which keep the original prohibitions and add only the block. The
+unconstrained and structural arms were generated and timed in one interleaved session on the H100 node;
+the \texttt{pcrl} and \texttt{code\_only} arms were generated later and timed on the same node in the
+re-timing of E4 (CUDA 13.3.1, five clean repetitions per arm). Both GPT-5 and Gemini~3.1~Pro are run.
+Besides the timings, we read the generated source of every arm to see whether the per-iteration atomic
+operation is still there.
+
+\subsection{Experiment 3: Production Applications}
+\label{sec:setup-e3}
+E3 answers RQ3. On each application, both models are run with the \emph{baseline} prompt and with the
+\emph{structural} prompt, and the results are compared with an expert hand-tuned reference restricted
+to the same single file. Each (application, model, prompt) cell is one generation, and a cell is
+reported as a failure when no candidate passed the gate within three repair iterations. Timing uses
+the application's own phase timer on the GH200. The clean repetitions per median are: AutoDock-GPU
+model arms $5$ (idle GPU), except Gemini \emph{structural}, which was timed in a session with another
+user's job resident and whose baseline ratios reproduced the idle session's within $0.7\%$;
+AutoDock-GPU hand reference $7$; Cholla $3$ of $5$ (two excluded for a foreign job, spread
+$\le 0.12\%$).
+
+\subsection{Experiment 4: Profile-Data Ablation}
+\label{sec:setup-e4}
+E4 answers the first half of RQ4: does profiling data help at all? It compares the \texttt{pcrl}
+prompt against the \texttt{code\_only} prompt of Section~\ref{sec:ablation}, which differ only in the
+presence of the profile summaries, with both models on the ten later benchmarks and on both
+applications: $24$ (program, model) pairs. The benchmark pairs are timed on the H100 node with five
+repetitions per arm, all five clean for every pair; per-repetition spread there ranges from $0.1\%$ to
+$37.4\%$, so each pair is scored with the tie rule of Section~\ref{sec:timing}. The application pairs
+are timed on the GH200: Cholla over $4$ of $7$ repetitions (three excluded for drift with no foreign
+job detected), AutoDock-GPU over $2$ of $7$ (five excluded for foreign jobs). For the applications a
+second, independently generated \texttt{pcrl} sample was also run, which is the baseline arm of E3.
+
+\subsection{Experiment 5: Prescriptive Guidance}
+\label{sec:setup-e5}
+E5 answers the second half of RQ4: what happens when the profiling data is converted into named
+remedies before the model sees it? It runs four arms on the GH200, with the node idle, all arms built
+once and timed round-robin in a single session: the unmodified program, the constrained
+\emph{baseline} prompt, the relaxed \emph{structural} prompt, and \emph{diagnostics}, which is the
+structural prompt plus the checklist (Section~\ref{sec:ablation}). The cleanest comparison is
+therefore \emph{diagnostics} against \emph{structural}, which differ only in the checklist. Seven
+benchmarks were run with both models; with \texttt{chemv} excluded, twelve (benchmark, model) pairs
+are scored: \texttt{amgmk}, \texttt{bincount}, \texttt{blockAccess}, \texttt{boxfilter},
+\texttt{concat} and \texttt{convolutionSeparable}. Each cell is a single generation.

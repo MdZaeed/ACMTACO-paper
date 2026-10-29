@@ -1,34 +1,35 @@
-We present an empirical study of how prompt design---specifically, the task-specific guardrails and the
-profiling evidence placed in the prompt---shapes the ability of large language models to optimize GPU
-code, and of how far the resulting gains survive on production scientific applications. Our framework
-closes the loop from profiling to prompting, generation, build, correctness verification and timed
-measurement, with bounded repair from compiler and runtime feedback. We first ablate prompt components
-across six variants, two models and six HPC kernels: stripping the instructions produces the slowest
-valid result more often than any other variant, whereas an explicit reasoning step never produces the
-slowest, although it does not prevent outright failures. We then
-show that guardrails are not merely a safety concern but a correctness one. Without an explicit
-semantic-preservation constraint, both models optimize a benchmark by deleting the very computation it
-exists to measure, reporting speedups of $1504\times$ and $2809\times$ while the program's output and
-its built-in verification remain unchanged; the constraint reduces both to honest results. Moving from
-kernels to applications---AutoDock-GPU and Cholla, each gated by its own scientific output and
-measured under interleaved timing on shared GPUs---we find that models reliably discover local, exact
-transformations and reliably miss cross-cutting restructuring: on Cholla all four model outputs under
-the baseline prompt (two independent samples per model, $1.48$--$1.58\times$) beat our expert
-hand-tuned reference ($1.47\times$), while on AutoDock-GPU no model or
-prompt variant found the reduction fusion worth $1.532\times$ by hand. Finally, an ablation that removes
-profiling data from an otherwise identical prompt shows that PC-sampling and roofline context is worth
-$7.7$--$11.5\%$ on the large application, while on single-kernel benchmarks it moves individual results
-in both directions with no net gain, indicating
-that its value scales with how hard the bottleneck is to locate from source alone. We also report
-failure modes that appear only on real code---compilation-context blindness, applications that discard
-the diagnostics a repair loop needs, and shared-machine measurement pitfalls---and argue that
-benchmark-only evaluation overstates the readiness of LLM-driven performance tools.
+% EDIT (2026-10-29): rewritten to the author's outline ("showing how prompt design affects the
+% outcome ... we show 1) the impact of guardrails 2) the importance of profiling data 3) ..."). Every
+% number is one already reported in the body; the per-variant first-attempt counts are read off
+% Table~\ref{tab:ablation}.
+We present an empirical study of how prompt design affects what a large language model does when it
+is asked to make GPU code faster, and of how far the gains it finds survive on production scientific
+applications. Our framework, OPTIMAS, closes the loop from profiling to prompting, generation, build,
+correctness check and timed measurement, with up to three repair iterations driven by compiler and
+runtime feedback. We vary the prompt one component at a time and measure the outcome on HeCBench
+kernels and on two production applications, AutoDock-GPU and Cholla, each checked against its own
+scientific output. We show (1) the impact of guardrails: which instructions the prompt carries decides
+how often a model returns a valid candidate at the first attempt (between $8$ and $11$ of $12$ runs,
+depending on which component is removed) and how slow its worst result is; and without an explicit
+semantic-preservation rule both models ``optimize'' a benchmark by deleting the computation it exists
+to measure, reporting $1504\times$ and $2809\times$ while the benchmark's own check still passes;
+(2) the importance of profiling data: removing it from an otherwise identical prompt costs
+$7.7$--$11.5\%$ on a 21k-line application, while on single-kernel benchmarks it moves individual
+results in both directions with no net gain; (3) the limits of interpreting that data for the model:
+converting profiler metrics into a checklist of named remedies produces both our largest gain
+($1.00\times \to 1.38\times$) and our largest loss ($0.84\times \to 0.35\times$), so its effect is a
+wider spread of outcomes rather than a better average; and (4) what the models can and cannot do:
+they reliably find local, exact transformations---on Cholla all four outputs under the baseline
+prompt ($1.48$--$1.58\times$) beat our hand-tuned reference ($1.47\times$)---and reliably miss
+cross-cutting restructuring, leaving unfound on AutoDock-GPU the reduction fusion that is worth
+$1.53\times$ by hand. We also report the problems that appear only on real code and the measurement
+practice needed to report any of this credibly on shared GPUs.
 
 % ---------------------------------------------------------------------------
 % ORIGINAL ABSTRACT (kept for reference). It describes three prompt designs
 % (loose / constrained / agentic) and a one-shot agentic result; the version above
 % was rewritten to match the experiments currently in the paper (six-variant
-% ablation, semantic-preservation constraint, three applications, profile-data
+% ablation, semantic-preservation constraint, two applications, profile-data
 % ablation). Restore or merge if the agentic-prompt experiment is added.
 %
 % We present an empirical study of how progressively adding task-specific guardrails to prompts

@@ -1,0 +1,311 @@
+\section{Methodology}
+\label{sec:method}
+% EDIT (2026-10-29): new section built from the old Sections 3 (pipeline, profiling data, prompt
+% structure), 5.1 (prompt variants), 6.2 (constraint text), 4.3--4.5 (correctness, timing, reporting
+% conventions), 7.2--7.3 (gates, application timing) and the "Arms"/"Setup" paragraphs of 8.1 and 8.2,
+% following the reviewer's requested structure. The variant descriptions were re-derived from the
+% saved prompts (diffs of src/results/atan2-codex-gpt5-<variant>/*prompt_1.txt against the cot prompt)
+% and correct two statements of the earlier text: no_constraints removes only the six rules written
+% as "Do NOT", and minimal keeps the hardware guidance and the entry-point guardrails.
+This section describes the system under study---the optimization loop, the profiling data it can
+place in the prompt, and the prompt itself---and then the prompt variants, the correctness checks and
+the measurement protocol on which every result depends.
+
+\subsection{The Optimization Loop}
+\label{sec:subject}
+The framework takes a source file, a build-and-run script and the profile of the program, and closes
+the loop shown in Figure~\ref{fig:pipeline}: \emph{profile $\rightarrow$ summarize $\rightarrow$ prompt
+$\rightarrow$ generate $\rightarrow$ build $\rightarrow$ verify $\rightarrow$ measure}, with bounded
+repair. Profiling happens once, before the loop. The prompt carries the source file, the profile
+summaries and the instructions described below; the model answers with a complete replacement for the
+file. That file replaces the original in a private copy of the program tree, so the build, the callers
+and the input data are those of the real program. The build-and-run script then compiles the program,
+runs it, and applies its correctness check. If compilation fails, the program crashes, or the check
+prints a failure, the loop summarizes the build log (at most $80$ lines), assembles a repair prompt
+from the original source, the rejected candidate and that summary, and asks the model again; a repair
+that returns the candidate unchanged is rejected and requested once more. We allow three iterations
+before recording the run as a failure. When a candidate builds and passes, the loop records its
+in-loop execution time, the average of ten runs of the binary. That number serves the loop only; the
+timings reported in this paper come from a separate interleaved measurement pass
+(Section~\ref{sec:timing}).
+
+\begin{figure}[t]
+\centering
+\resizebox{\textwidth}{!}{\input{figures/pipeline}}
+\caption{The optimization loop. Profiling and summarization run once; the prompt, model, build and
+  verification steps form the repair loop, bounded at three iterations. The in-loop time is used only
+  to record the run; every timing reported in this paper comes from the separate interleaved pass of
+  Section~\ref{sec:timing}.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Profiling Data}
+\label{sec:profdata}
+% EDIT (2026-10-29): more context on what each kind of data is, asked for in review.
+The profile comes from Nsight Compute, NVIDIA's kernel profiler, in two passes over the program: an
+uncapped pass that records every kernel launch and gives true launch counts and per-launch durations,
+and a capped \texttt{-{}-set full} pass over a bounded number of launches that collects the detailed
+metric pages. From the two reports we derive three kinds of prompt context, each rendered as a short
+text or JSON summary:
+\begin{itemize}\itemsep2pt
+  \item \textbf{PC sampling} (\texttt{-{}-page source}). The profiler periodically samples the program
+    counter of running warps and records, for each sample, whether the warp was stalled and why (waiting
+    on memory, on a math unit, on a barrier, and so on). Aggregated per source line, this says which
+    lines the kernel spends its time on and what those lines are waiting for. The summary lists the
+    lines with the highest stall ratios, each with its source text and its stall reasons, so that the
+    model can refer to them by line number.
+  \item \textbf{Roofline} (\texttt{-{}-page details}). For each kernel, the achieved DRAM and compute
+    throughput relative to the device's peaks, which says whether the kernel is bound by memory
+    bandwidth, by arithmetic throughput, or by neither (latency-bound), together with the analysis rules
+    that Nsight Compute itself reports for the kernel.
+  \item \textbf{Kernel importance}. The aggregate cost of each kernel (launch count $\times$ per-launch
+    time), used to rank which kernel is worth editing at all. For the single-kernel benchmarks this is
+    trivial; for the applications it is what selects the target file.
+\end{itemize}
+The arms that remove or extend this evidence are defined with the prompt variants below.
+
+\subsection{Prompt Structure}
+\label{sec:promptstructure}
+% EDIT (2026-10-29): the regions are now listed in the order they appear in the prompt, with an excerpt
+% of each (Table~\ref{tab:prompt}), taken from the saved prompt
+% src/results/atan2-codex-gpt5-cot/atan2_pc+rl_gpt5_cot_prompt_1.txt.
+Table~\ref{tab:prompt} shows the full prompt region by region, with the text of each region as sent.
+A one-line persona is sent as the system message. The user message then carries, in order: the
+numbered source file; the profile summaries; a hardware-guidance paragraph naming the Hopper features
+to target; five entry-point guardrails that protect the program's \texttt{main} and its linkage; and
+the instruction block. The instruction block states the task and requires a correctness argument
+(preconditions, postconditions, loop invariants and a proof that the transformation preserves them),
+and then gives nineteen numbered rules: six prohibitions written as ``Do NOT'' (no new top-level
+symbols, no wrapper helpers, no larger shared-memory footprint, and three entry-point rules), a set of
+working rules (use the profile's line references, make at least one substantive change, keep the code
+unchanged and say so if none is justified, no line numbers, no renamed functions or changed
+signatures), and the output format: the complete source in one fenced code block followed by two
+structured lists, the optimizations applied and those considered but not applied.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{The prompt, region by region, with the text as sent (excerpts; $\langle\cdot\rangle$ marks
+  generated content). The persona is the system message; everything else is the user message, in this
+  order.}
+\label{tab:prompt}
+\begin{tabular}{@{}p{0.2\textwidth}p{0.76\textwidth}@{}}
+\toprule
+\textbf{Region} & \textbf{As sent} \\
+\midrule
+Persona (system message) & \texttt{You are an HPC performance optimization expert.} \\
+Source file & \texttt{\# Begin Source Code} $\langle$the file, one numbered line per source line$\rangle$
+  \texttt{\# End Source Code} \\
+Profile summaries & \texttt{\# Begin Performance Analysis} $\langle$PC-sampling summary: for each hot
+  line, its number, its source text and its stall reasons$\rangle$ $\langle$roofline summary$\rangle$
+  \texttt{\# End Performance Analysis} \\
+Hardware guidance & \texttt{Optimize specifically for NVIDIA H100 (Hopper) by targeting L2/cache reuse,
+  HBM3 bandwidth, and Tensor Core throughput. Prioritize tiling and data locality: \ldots} \\
+Entry-point guardrails & \texttt{1. The source already contains 1 main() definition(s). Preserve exactly
+  that many main() definitions. 2. Do NOT add a new main(), duplicate main(), rename main(), \ldots} \\
+Task and proof requirement & \texttt{Optimize the following HPC code for execution time. You must define
+  mathematical preconditions and postconditions, provide explicit loop invariants to guarantee semantic
+  equivalence, and provide a logical proof showing why the invariants remain unbroken \ldots} \\
+Prohibitions & \texttt{9. Do NOT introduce any new helper functions, utility functions, macros,
+  templates, classes, structs, global variables, or other new top-level symbols \ldots\
+  11. Do NOT increase the total shared-memory footprint of any kernel \ldots} \\
+Working rules & \texttt{12. Use the performance analysis reference number(s) to guide your changes.
+  \ldots\ 15. When the performance data supports it, apply at least one substantive
+  performance-motivated code change \ldots\ 16. If no safe substantive optimization can be justified
+  \ldots, keep the code semantically unchanged and say so explicitly \ldots} \\
+Output format and explanation & \texttt{17. Return: (a) the full source code including the optimized
+  kernels inside {\textasciigrave\textasciigrave\textasciigrave} block (b) optimizations list = [\{'lines': [...], 'reason': '...'\}] (c)
+  suggested\_but\_not\_applied list = [\{'lines': [...], 'reason': '...'\}]} \\
+Step-by-step instruction (\texttt{cot} only) & \texttt{Think step by step about which bottlenecks to
+  address and why before writing any code.} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Prompt Variants}
+\label{sec:ablation}
+To find out which parts of the prompt matter, the prompt-component study evaluates six variants, each
+of which removes or adds exactly one region while leaving the source file and the profile summaries in
+place. Table~\ref{tab:variants} shows which regions each variant carries. We describe them from the
+least populated prompt to the most populated one; the effect of each is reported in
+Section~\ref{sec:prompts}.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\caption{Prompt regions carried by each variant of the prompt-component study, from the least to the
+  most populated. The persona, the source file, the profile summaries and the single-code-block output
+  requirement are present in every variant. \cmark\ = present, \xmark\ = absent.}
+\label{tab:variants}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Region} & \texttt{minimal} & \texttt{no\_role} & \texttt{no\_constraints} & \texttt{no\_proof}
+  & \texttt{no\_explanation} & \texttt{cot} \\
+\midrule
+Hardware guidance            & \cmark & \xmark & \cmark & \cmark & \cmark & \cmark \\
+Entry-point guardrails       & \cmark & \cmark & 2 of 5 & \cmark & \cmark & \cmark \\
+Proof requirement            & \xmark & \cmark & \cmark & \xmark & \cmark & \cmark \\
+Prohibitions (``Do NOT'')    & \xmark & \cmark & \xmark & \cmark & \cmark & \cmark \\
+Working rules                & \xmark & \cmark & \cmark & \cmark & \cmark & \cmark \\
+Explanation lists            & \xmark & \cmark & \cmark & \cmark & \xmark & \cmark \\
+Step-by-step instruction     & \xmark & \xmark & \xmark & \xmark & \xmark & \cmark \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Minimal (\texttt{minimal}).}
+The whole instruction block---task statement, proof requirement, the nineteen rules and the output
+format---is replaced by one sentence: \textit{``Optimize the following CUDA code for execution time.
+Return the complete optimized source in a single \texttt{cpp} block.''} The source, the profile
+summaries, the hardware guidance and the entry-point guardrails remain, so \texttt{minimal} isolates
+the value of the \emph{instructions}; removing the evidence instead is the separate profile-data
+ablation (\texttt{code\_only}, below).
+
+\paragraph{No Role (\texttt{no\_role}).}
+Removes the hardware-guidance paragraph, which tells the model which Hopper features to target (cache
+reuse, asynchronous copies, Tensor Cores, occupancy, warp efficiency). The one-line persona is a system
+message and stays in every variant.
+
+\paragraph{No Constraints (\texttt{no\_constraints}).}
+Removes the six rules written as prohibitions: no new helper functions, macros, templates or other
+top-level symbols; no wrapper load helpers; no larger shared-memory footprint; no second entry point;
+no wrapper executables; and no renaming of externally referenced functions. The remaining rules
+(including ``do not change any function signatures'' and ``do not rename or duplicate any kernel'')
+stay, so the variant frees the model to add code around the existing kernels rather than to change
+their interface.
+
+\paragraph{No Proof (\texttt{no\_proof}).}
+Removes the sentence that requires preconditions, postconditions, loop invariants and a proof of
+semantic equivalence. The model may then apply a transformation without having to argue that it
+preserves the computation.
+
+\paragraph{No Explanation (\texttt{no\_explanation}).}
+Removes the two structured lists from the required output---the optimizations applied and those
+considered but not applied---and asks for the code alone. Having to name and justify each change is a
+form of implicit reasoning, and the lists are also the record from which we reconstruct \emph{why} a
+run behaved as it did.
+
+\paragraph{Chain of Thought (\texttt{cot}).}
+Unlike the others, \texttt{cot} adds a region: the instruction \textit{``Think step by step about which
+bottlenecks to address and why before writing any code''} is prepended to the instruction block. It is
+the most populated prompt in the study and, since the study has no separate full-prompt arm, the
+closest thing to one.
+
+\paragraph{Variants not evaluated.}
+Two further variants are implemented but excluded from the measured grid. \texttt{no\_format} strips
+the output-format requirement and asks only for optimized code; it perturbs the reliability of
+automated code extraction rather than the quality of the optimization, which would confound the metric.
+\texttt{no\_hardware} removes the hardware-guidance paragraph and the target-architecture line; in the
+prompt format used here it removes the same paragraph as \texttt{no\_role}, so it is subsumed.
+
+\paragraph{Variants used in the later experiments.}
+Three prompts defined after the component study are used in Sections~\ref{sec:realapps}
+to~\ref{sec:guidvar}:
+\begin{itemize}\itemsep2pt
+  \item \textbf{Baseline} is the full prompt of Table~\ref{tab:prompt} with PC-sampling and roofline
+    summaries (\texttt{pcrl} in the profile-data ablation, where the name distinguishes it from the arm
+    without data).
+  \item \textbf{Structural} relaxes the prohibitions: it allows new kernels, helpers and templates,
+    signature and launch-configuration changes, and shared-memory staging, under an explicit contract
+    that the computation is preserved, and it adds two derived summaries, a per-kernel budget (launch
+    count, aggregate time, DRAM and SM utilization, bound verdict) and an occupancy summary (achieved
+    occupancy, waves per SM, and the resource that limits occupancy).
+  \item \textbf{Diagnostics} is the structural prompt plus a bounded checklist of measured conditions
+    and the transformation each one suggests. Each item is triggered by the kernel's own numbers
+    (occupancy, DRAM and SM throughput, shared-memory use) and names a remedy, for example
+    \textit{``Is a value read from and written back to global memory inside the innermost loop (an
+    accumulator, counter or running sum)? \ldots\ Accumulate in a local variable and store once after
+    the loop.''} It is our instance of profiling data made prescriptive.
+    % Quoted from src/DiagnosticsSummarization.py, item (a).
+  \item \textbf{Code only} (\texttt{code\_only}) is the baseline prompt without the profile summaries.
+    Removing the summaries alone would bias the comparison, because four instruction sentences refer to
+    the data---most importantly rule 16, \textit{``if no safe substantive optimization can be
+    justified from the provided performance data, keep the code semantically unchanged''}, which would
+    invite a no-op when no data is present. Those four sentences are reworded to refer to the model's
+    own analysis of the source; the two prompts are otherwise byte-identical (verified: the diff is the
+    removed block plus those four sentences).
+\end{itemize}
+
+\subsection{The Semantic-Preservation Constraint}
+\label{sec:constraint}
+% EDIT (2026-10-29): constraint text moved here from the old Section 6.2; the dates of the arms that
+% carry it are from the saved prompts on the cluster (bincount-gpt5 2026-09-09: absent;
+% bincount-gpt5-struct 2026-09-09, autodock_gpu-gpt5 2026-09-17, *-prof-* 2026-09-22: present).
+The gaming described in the introduction led us to add a \emph{semantic preservation} block to the
+prompt. It states that the model may change \emph{how} a computation executes (data placement, memory
+layout and access pattern, thread/block mapping, vectorization, unrolling, loop fusion, tiling and
+reordering, hoisting loop-invariant work) but may not change \emph{what} is computed or how much work
+is done. In particular it may not reduce the number of algorithm-level operations by exploiting
+algebraic identities, change the iteration count of a timing, repeat or convergence loop, precompute at
+compile time a value the program computes at run time, skip work on the grounds that the program's own
+verification would still pass, or alter printed output. A closing sentence names the case directly: if
+a benchmark exists to measure a specific hardware operation, that operation must still be performed the
+same number of times on the same volume of data. The rule is deliberately scoped to \emph{benchmark
+scaffolding}; eliminating genuine redundancy inside an application remains allowed, since that is the
+goal for real codes (Section~\ref{sec:gaming-disc}). The block was added after the component study.
+The six variants of that study and the baseline arms generated before the change do not carry it;
+the structural, diagnostics, \texttt{pcrl} and \texttt{code\_only} prompts and the application study
+all do.
+
+\subsection{Correctness Validation}
+\label{sec:correctness}
+% EDIT (2026-10-29): merged from the old 4.3 and 7.2.
+A candidate counts only if it is correct, and correctness is checked in whichever way the program
+supports. The HeCBench benchmarks ship a built-in check that prints PASS or FAIL after comparing the
+GPU result with a host reference, or print numerical results that the candidate must reproduce; the
+build-and-run script applies that check in every iteration of the loop, so a failing candidate is sent
+back for repair rather than timed. Benchmarks whose check cannot pass for the unmodified program are
+excluded (Section~\ref{sec:guidvar}).
+
+Applications do not ship a check, and their outputs are not always reproducible, so we built one gate
+per application and validated each gate negatively as well as positively:
+\begin{itemize}\itemsep2pt
+  \item \textbf{AutoDock-GPU} is stochastic on the GPU even with a fixed seed (best energies
+    $-13.89$, $-14.38$, $-14.01$\,kcal/mol for one binary), so the gate is a band: 50 poses and best
+    energy $\le -12.5$\,kcal/mol. Negative test: flipping the gradient sign yields $-0.53$ (FAIL).
+  \item \textbf{Cholla} is bit-deterministic; the gate compares the full 3D snapshot field by field
+    (relative $L_1 \le 10^{-9}$, relative max $\le 10^{-6}$) after 137 steps. Negative tests: a flipped
+    energy-flux sign diverges (FAIL) and a $10^{-6}$ relative perturbation of one flux is caught
+    ($L_1 \approx 10^{-6}$, three orders of magnitude over tolerance).
+\end{itemize}
+Every application candidate reported in this paper passed its gate. Since a gate checks the outputs the
+program prints and not all internal state, ``gated correct'' means ``passed these checks'', not
+``verified''; Section~\ref{sec:limits} discusses what that leaves open.
+
+\subsection{Timing and Measurement Protocol}
+\label{sec:timing}
+% EDIT (2026-10-29): merged from the old 4.4, 4.5 and 7.3, stated once; "drift" defined before it is
+% used and the 49% figure clarified (the same unmodified binary timed in two sessions, HeCBench study,
+% scripts/optimas_study/README.md item 5). "Pedantic" removed.
+\paragraph{What is timed.}
+Time comes from the program's own reported kernel or phase time wherever it provides one, and from wall
+clock otherwise. For the applications this matters: AutoDock-GPU's CUDA setup alone takes $68$\,s on a
+cold driver and would swamp a few percent of solver time, so we use each application's own phase timer.
+
+\paragraph{Drift, and the protocol that controls it.}
+By \emph{drift} we mean a change in the measured time of the same binary between two sessions, with no
+change to the code. Our GPU nodes are shared with other users, and drift there is large: the same
+unmodified HeCBench binary timed in two sessions differed by up to $49\%$, an order of magnitude more
+than most of the effects we are trying to measure. Two things follow. First, the pipeline's in-loop
+time is never reported; it was off by $15\%$ for one application arm. Second, every reported number,
+except the prompt-component grid of Section~\ref{sec:prompts} (whose runtimes are the in-loop
+ten-run averages, measured during that study), comes from a separate measurement pass with one design:
+build every arm of a program once; discard a warm-up run; wait for an idle GPU before starting; time
+all arms round-robin within a single session, so that whatever the node is doing affects every arm
+alike; log other users' GPU processes at the start \emph{and} the end of every repetition, and exclude
+the repetitions that were not clean; and take the median over the clean repetitions. Repetitions that
+disagree with their neighbours are treated as suspect even when no foreign process was seen. The number
+of clean repetitions behind each median is stated with each table: five per arm for the benchmarks, and
+for the applications between two and seven, depending on how often other users' jobs intervened. Two
+complete timing passes were discarded because another user's job occupied the GPU throughout.
+
+\paragraph{Reporting conventions.}
+Speedups are reported against the unmodified program unless a table states otherwise. Except where
+stated, each (program, model, prompt) cell is a single language-model sample, and an effect below
+roughly $5\%$ in a single cell is treated as unresolved rather than small. Where two arms are compared
+on a noisy benchmark, the pair is scored a \emph{tie} when the difference between the arms,
+$|\mathrm{a}/\mathrm{b}-1|$, is smaller than the largest repetition spread measured for that pair,
+that is, when the difference does not exceed its own measurement noise. Finally, any speedup above
+$5\times$ is treated as a correctness alarm rather than a result: its diff is read before it is
+reported, and Section~\ref{sec:gaming-disc} explains why.

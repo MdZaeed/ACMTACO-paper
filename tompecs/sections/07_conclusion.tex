@@ -1,0 +1,36 @@
+\section{Conclusion and Future Work}
+\label{sec:conclusions}
+% EDIT (2026-10-29): rewritten for the new structure; repeated numbers reduced to the ones that
+% carry the argument.
+We studied prompt design for LLM-driven GPU code optimization inside a closed loop that profiles,
+generates, builds, verifies and measures, and we pushed that loop past single-kernel benchmarks onto
+two production scientific applications.
+
+Three results stand out. First, guardrails decide what the models do with the freedom they are given.
+Which instructions the prompt carries decides how often a model returns a valid candidate at the first
+attempt and how slow its worst result is, and an explicit semantic-preservation constraint is what
+separates an honest result from a gamed one: without it, both models delete the computation a
+benchmark exists to measure and report speedups of three orders of magnitude that survive the
+benchmark's own correctness check. Second, profiling data earns its place in the prompt in proportion
+to how hard the bottleneck is to see from the source. On single-kernel benchmarks, where the hot loop
+is obvious, it moves individual results in both directions with no net gain; on a 21k-line application
+where it is not, it is worth $7.7$--$11.5\%$ to both models. Interpreting that data into named
+remedies does not improve the average; it widens the spread of outcomes. Third, and most consequential
+for anyone building such a system, the models reliably find local, exact transformations and reliably
+miss cross-cutting restructuring: on Cholla every model output under the baseline prompt beat our
+hand-tuned reference, while on AutoDock-GPU every candidate left in place the seven block reductions
+whose fusion the hand reference exploits.
+
+The failures were as informative as the speedups. Editing a single file inside a real program means the
+model cannot see how that file is compiled, and three of our application failures follow directly.
+Applications also swallow the diagnostics a repair loop needs, and shared machines silently corrupt
+measurements unless contention is detected per repetition. None of these appear when optimizing
+self-contained benchmark kernels, which is precisely why benchmark-only evaluation overstates how ready
+such systems are.
+
+Two directions follow. The prompt should carry the file's \emph{compilation context}---whether it is a
+standalone translation unit, which symbols are already in scope, and which declarations other files
+depend on---since that is cheap to extract and addresses the dominant real-code failure mode. And
+profiling data should be supplied as \emph{evidence rather than remedy}: the measured condition,
+not the transformation it suggests, so that the model keeps the choice that the checklist took from
+it.

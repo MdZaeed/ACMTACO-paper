@@ -1,0 +1,45 @@
+%% Workflow of the optimization loop (Figure 1). NEW (2026-10-29), drawn from src/opal_cli_codex.py:
+%% prompt -> LLM -> candidate -> build+run script (build, run, built-in check or gate) -> on error,
+%% summarized log -> repair prompt -> LLM, at most three iterations -> in-loop 10-run average.
+%% Profiling (two Nsight Compute passes) runs before the loop; the reported timings come from a
+%% separate interleaved pass. Needs \usetikzlibrary{arrows.meta,positioning,calc} (main.tex).
+%% Layout: row 1 profile..candidate; row 2 (right to left) build, verify, measure, timing pass;
+%% row 3 the repair step under build. No arrow crosses a node; the loop back to the model runs
+%% above row 1. NOT compiled yet (no LaTeX here): if a build fails, check this file first.
+\begin{tikzpicture}[
+  font=\footnotesize,
+  box/.style={draw, rounded corners=2pt, align=center, minimum height=2.2em, inner sep=4pt,
+              text width=5.6em},
+  wide/.style={box, text width=7.6em},
+  dec/.style={draw, align=center, minimum height=2.2em, inner sep=3pt, text width=5.2em},
+  arr/.style={-{Latex[length=2mm]}, thick},
+  lab/.style={font=\scriptsize, fill=white, inner sep=1pt},
+  node distance=5mm and 7mm
+]
+  % row 1: before the loop, and the generation step
+  \node[wide] (prof)   {Profile\\(Nsight Compute,\\two passes)};
+  \node[wide, right=of prof] (summ) {Summarize\\(PC sampling, roofline,\\kernel importance)};
+  \node[wide, right=of summ] (prompt) {Assemble prompt\\(source + summaries\\+ guardrails + format)};
+  \node[box,  right=of prompt] (llm) {LLM};
+  \node[box,  right=of llm] (cand) {Candidate\\source file};
+  % row 2: build, verify, measure, and the separate timing pass
+  \node[box,  below=of cand] (build) {Build};
+  \node[dec,  left=of build] (verify) {Verify\\(built-in check\\or gate)};
+  \node[wide, left=of verify] (measure) {Measure\\(in-loop average\\of 10 runs)};
+  \node[wide, left=of measure] (report) {Interleaved timing\\pass (all arms,\\one session)};
+  % row 3: repair
+  \node[wide, below=of build] (repair) {Summarize log,\\build repair prompt};
+
+  \draw[arr] (prof) -- (summ);
+  \draw[arr] (summ) -- (prompt);
+  \draw[arr] (prompt) -- (llm);
+  \draw[arr] (llm) -- (cand);
+  \draw[arr] (cand) -- (build);
+  \draw[arr] (build) -- node[lab, above] {ok} (verify);
+  \draw[arr] (verify) -- node[lab, above] {pass} (measure);
+  \draw[arr] (measure) -- node[lab, above] {reported} (report);
+  \draw[arr] (build) -- node[lab, right] {error} (repair);
+  \draw[arr] (verify.south) |- node[lab, pos=0.25, left] {fail} (repair.west);
+  \draw[arr] (repair.east) -- ++(5mm,0) |- ($(cand.north)+(0,4mm)$)
+             -| node[lab, pos=0.25, above] {repair prompt ($\le 3$ iterations)} (llm.north);
+\end{tikzpicture}

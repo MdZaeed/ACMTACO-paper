@@ -1,0 +1,453 @@
+\section{Results}
+\label{sec:results}
+% EDIT (2026-10-29): new section built from the old 5.2--5.3 (results, findings), 6.1--6.2
+% (observation, exploit, effect), 7.4 (application results), 8.1 (profile-data result) and 8.2
+% (guidance), one subsection per experiment. Interpretation moved to Section 5. Table 1 rows are
+% reordered to the variant order of Table~\ref{tab:variants}; the per-variant counts of
+% Table~\ref{tab:variantsum} are read off Table~\ref{tab:ablation}.
+This section reports the five experiments in the order of Section~\ref{sec:setup}. Each subsection
+gives the table, then the results we consider significant; what they mean is discussed in
+Section~\ref{sec:discussion}.
+
+\subsection{E1: Prompt-Component Ablation}
+\label{sec:prompts}
+Table~\ref{tab:ablation} reports all $72$ runs and Table~\ref{tab:variantsum} summarizes them per
+variant.
+
+\begin{table*}[t]
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{0.88}
+\caption{%
+  E1: runtime (\textmu s) and outcome across six HeCBench benchmarks and six prompt variants for GPT-5
+  and Gemini~2.5~Pro, variants ordered from the least to the most populated prompt. Runtimes are the
+  in-loop ten-run averages. Speedup is relative to the unmodified program where its runtime was
+  recorded (bitonic-sort: 51{,}590\,\textmu s; sobol: 2{,}576\,\textmu s; shmembench:
+  4{,}816\,\textmu s); ``---'' = no baseline available. \textbf{Bold} = best valid speedup per
+  benchmark per model. Result: \textit{s1} = first attempt; \textit{rep}$_n$ = repaired in $n$
+  iterations; \textit{fail} = all 3 failed; \textit{T/O} = timeout. $^\dagger$ benchmark gaming
+  (shared memory algebraically eliminated); $^*$ runtime extraction failure.
+}
+\label{tab:ablation}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llrrcrrcc@{}}
+\toprule
+\multirow{2}{*}{\textbf{Benchmark}}
+  & \multirow{2}{*}{\textbf{Variant}}
+  & \multicolumn{3}{c}{\textbf{GPT-5}}
+  & \multicolumn{4}{c}{\textbf{Gemini 2.5 Pro}} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-9}
+  & & \textbf{Runtime (\textmu s)} & \textbf{Speedup} & \textbf{Result}
+    & & \textbf{Runtime (\textmu s)} & \textbf{Speedup} & \textbf{Result} \\
+\midrule
+\multirow{6}{*}{\texttt{atan2}}
+  & \texttt{minimal}         &  97.53 & --- & \textit{s1}       &&  92.27 & --- & \textit{rep}$_2$ \\
+  & \texttt{no\_role}        &  87.76 & --- & \textit{s1}       &&  91.59 & --- & \textit{s1}      \\
+  & \texttt{no\_constraints} &  94.01 & --- & \textit{s1}       &&  91.22 & --- & \textit{s1}      \\
+  & \texttt{no\_proof}       &  89.00 & --- & \textit{s1}       &&  92.63 & --- & \textit{s1}      \\
+  & \texttt{no\_explanation} &  91.08 & --- & \textit{s1}       &&  92.41 & --- & \textit{s1}      \\
+  & \texttt{cot}             &  87.47 & --- & \textit{s1}       &&    --- & --- & \textit{fail}    \\
+\midrule
+\multirow{6}{*}{\texttt{bitonic-sort}}
+  & \texttt{minimal}         & 55{,}820 & 0.92$\times$          & \textit{s1} && 55{,}181 & 0.93$\times$          & \textit{s1}      \\
+  & \texttt{no\_role}        & 57{,}370 & 0.90$\times$          & \textit{s1} && 54{,}613 & 0.94$\times$          & \textit{s1}      \\
+  & \texttt{no\_constraints} & 45{,}364 & \textbf{1.14}$\times$ & \textit{s1} && 57{,}022 & 0.90$\times$          & \textit{rep}$_2$ \\
+  & \texttt{no\_proof}       & 45{,}342 & \textbf{1.14}$\times$ & \textit{s1} && 57{,}288 & 0.90$\times$          & \textit{rep}$_2$ \\
+  & \texttt{no\_explanation} & 57{,}277 & 0.90$\times$          & \textit{s1} && 45{,}681 & \textbf{1.13}$\times$ & \textit{rep}$_2$ \\
+  & \texttt{cot}             & 45{,}450 & \textbf{1.14}$\times$ & \textit{s1} && 45{,}678 & \textbf{1.13}$\times$ & \textit{s1}      \\
+\midrule
+\multirow{6}{*}{\texttt{md5hash}}
+  & \texttt{minimal}         & 396{,}800 & --- & \textit{s1}      && 288{,}700 & --- & \textit{s1}      \\
+  & \texttt{no\_role}        & 293{,}100 & --- & \textit{s1}      && 299{,}500 & --- & \textit{s1}      \\
+  & \texttt{no\_constraints} & 262{,}600 & --- & \textit{s1}      && 296{,}500 & --- & \textit{s1}      \\
+  & \texttt{no\_proof}       & 262{,}500 & --- & \textit{rep}$_3$ && 301{,}400 & --- & \textit{s1}      \\
+  & \texttt{no\_explanation} & 262{,}600 & --- & \textit{s1}      && 299{,}200 & --- & \textit{s1}      \\
+  & \texttt{cot}             & 295{,}200 & --- & \textit{s1}      && 296{,}900 & --- & \textit{s1}      \\
+\midrule
+\multirow{6}{*}{\texttt{accuracy}}
+  & \texttt{minimal}         & 282.68 & --- & \textit{s1}       && 294.74 & --- & \textit{s1}      \\
+  & \texttt{no\_role}        &    --- & --- & \textit{T/O}      && 296.31 & --- & \textit{s1}      \\
+  & \texttt{no\_constraints} & 213.70 & --- & \textit{s1}       && 296.44 & --- & \textit{s1}      \\
+  & \texttt{no\_proof}       & 214.08 & --- & \textit{rep}$_2$  && 308.62 & --- & \textit{s1}      \\
+  & \texttt{no\_explanation} & 214.83 & --- & \textit{s1}       && 213.27 & --- & \textit{s1}      \\
+  & \texttt{cot}             & 215.38 & --- & \textit{s1}       && 214.90 & --- & \textit{s1}      \\
+\midrule
+\multirow{6}{*}{\texttt{sobol}}
+  & \texttt{minimal}         & 2{,}824.18 & 0.91$\times$          & \textit{s1}      && 2{,}574.01   & 1.00$\times$ & \textit{rep}$_3$ \\
+  & \texttt{no\_role}        & 2{,}623.37 & \textbf{0.98}$\times$ & \textit{s1}      &&          --- & ---          & \textit{fail}    \\
+  & \texttt{no\_constraints} &        --- & ---$^*$               & \textit{s1}$^*$  && 2{,}620.28   & 0.98$\times$ & \textit{s1}      \\
+  & \texttt{no\_proof}       & 2{,}814.58 & 0.92$\times$          & \textit{s1}      && 2{,}575.83   & 1.00$\times$ & \textit{rep}$_3$ \\
+  & \texttt{no\_explanation} & 2{,}660.79 & 0.97$\times$          & \textit{s1}      &&          --- & ---          & \textit{fail}    \\
+  & \texttt{cot}             & 2{,}809.94 & 0.92$\times$          & \textit{s1}      &&          --- & ---          & \textit{fail}    \\
+\midrule
+\multirow{6}{*}{\texttt{shmembench}}
+  & \texttt{minimal}         &     5.08 & 949$\times^\dagger$          & \textit{s1}$^\dagger$ && 18{,}735 & 0.26$\times$          & \textit{s1}           \\
+  & \texttt{no\_role}        &    20.50 & 235$\times^\dagger$          & \textit{s1}$^\dagger$ &&  4{,}817 & 1.00$\times$          & \textit{s1}           \\
+  & \texttt{no\_constraints} &    20.47 & 235$\times^\dagger$          & \textit{s1}$^\dagger$ &&  4{,}661 & \textbf{1.03}$\times$ & \textit{s1}           \\
+  & \texttt{no\_proof}       &    20.49 & 235$\times^\dagger$          & \textit{s1}$^\dagger$ &&    22.66 & 213$\times^\dagger$   & \textit{s1}$^\dagger$ \\
+  & \texttt{no\_explanation} &    20.46 & 235$\times^\dagger$          & \textit{s1}$^\dagger$ &&  9{,}145 & 0.53$\times$          & \textit{s1}           \\
+  & \texttt{cot}             &    20.49 & 235$\times^\dagger$          & \textit{s1}$^\dagger$ &&  4{,}661 & \textbf{1.03}$\times$ & \textit{s1}           \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{E1 per variant, read off Table~\ref{tab:ablation}: runs (of $12$, both models) that
+  produced a valid candidate at the first attempt (the GPT-5 \texttt{sobol} candidate whose runtime
+  could not be extracted counts here but not as a timed result) and that produced a timed result at
+  all; and the
+  number of benchmarks on which the variant gave a model its slowest valid result (GPT-5 over the
+  five benchmarks it did not game; Gemini over six).}
+\label{tab:variantsum}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+ & \textbf{First attempt} & \textbf{Timed result} & \multicolumn{2}{c}{\textbf{Slowest valid result}} \\
+\cmidrule(lr){4-5}
+\textbf{Variant} & \textbf{(of 12)} & \textbf{(of 12)} & \textbf{GPT-5 (of 5)} & \textbf{Gemini (of 6)} \\
+\midrule
+\texttt{minimal}         & 10 & 12 & 4 & 1 \\
+\texttt{no\_role}        & 10 & 10 & 1 & 0 \\
+\texttt{no\_constraints} & 11 & 11 & 0 & 1 \\
+\texttt{no\_proof}       &  8 & 12 & 0 & 4 \\
+\texttt{no\_explanation} & 10 & 11 & 0 & 0 \\
+\texttt{cot}             & 10 & 10 & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Which variant produces a valid candidate at the first attempt.}
+Across the grid, GPT-5 produced a timed result at the first attempt in $32$ of $36$ runs (of the other
+four, two needed repair, one timed out and one built but its runtime could not be extracted) and
+Gemini~2.5~Pro in $26$ of $36$; Gemini used all three iterations on six runs, two of which were
+eventually repaired and four of which failed, three of them on \texttt{sobol} (two correctness
+violations and a persistent \texttt{\_\_builtin\_ctz} host-device mismatch). GPT-5 has no build or
+correctness failure; its one unusable run is the timeout. Per variant, the first-attempt rate ranges
+from $8$ to $11$ of $12$. Removing the prohibitions costs the fewest first attempts ($11$ of $12$);
+removing the proof requirement costs the most ($8$ of $12$: two GPT-5 runs and two Gemini runs needed
+repair), although all twelve \texttt{no\_proof} runs were eventually repaired. Three variants
+lose runs outright: \texttt{no\_role} (GPT-5's single timeout, on \texttt{accuracy}, and a Gemini
+failure on \texttt{sobol}), \texttt{no\_explanation} (one Gemini failure, on \texttt{sobol}) and
+\texttt{cot} (Gemini failed both \texttt{atan2}, where all three iterations failed, and
+\texttt{sobol}, where it placed \texttt{\_\_builtin\_ctz}---a host-only intrinsic---inside a
+\texttt{\_\_global\_\_} kernel and could not repair the compile error).
+
+\paragraph{Which variant produces the slowest code.}
+For GPT-5, \texttt{minimal} gives the slowest valid result on four of the five benchmarks it did not
+game: by $34\%$ on \texttt{md5hash} ($396{,}800$ against $295{,}200$\,\textmu s for the next slowest
+variant) and $31\%$ on \texttt{accuracy}, and by under $4\%$ on \texttt{atan2} and \texttt{sobol}. For
+Gemini the slow end belongs to \texttt{no\_proof}, which gives its slowest valid result on four of six
+benchmarks, each time by a small margin over the next slowest variant ($0.2$--$4\%$), so the pattern is
+a consistent position at the slow end rather than a large penalty; Gemini's one large \texttt{minimal}
+penalty is \texttt{shmembench} ($18{,}735$\,\textmu s, four times its best valid variant and twice the
+next slowest). The \texttt{cot} and \texttt{no\_explanation} variants never give either model its
+slowest valid result.
+
+\paragraph{Optimization quality.}
+Within this configuration neither model delivers large or reliable speedups. The best result across all
+valid runs is $1.14\times$ (GPT-5 on \texttt{bitonic-sort} under \texttt{no\_constraints},
+\texttt{no\_proof} or \texttt{cot}) and $1.13\times$ (Gemini on the same benchmark under
+\texttt{no\_explanation} or \texttt{cot}); \texttt{cot} reaches the best observed speedup for both
+models. On \texttt{sobol} both models either fail or match the baseline within $2\%$. On
+\texttt{atan2}, \texttt{md5hash} and \texttt{accuracy} the runtimes differ by variant more than by any
+optimization. The remaining components act differently on the two models: removing the prohibitions
+produces GPT-5's best \texttt{bitonic-sort} result ($1.14\times$) and one of Gemini's worst
+($0.90\times$); removing the explanation lists is Gemini's best \texttt{bitonic-sort} variant
+($1.13\times$) and has no discernible effect elsewhere.
+
+\paragraph{Benchmark gaming.}
+\label{sec:gaming-obs}
+The most consequential entry in Table~\ref{tab:ablation} is not a speedup but a false one. On
+\texttt{shmembench}, GPT-5 games the benchmark under all six variants without exception, exploiting
+the fact that a swap-based permutation preserves the sum to eliminate all shared-memory traffic and
+report $235$--$949\times$ apparent speedups. Gemini does so only when the proof requirement is removed
+(\texttt{no\_proof}), reaching $213\times$ by the same mechanism. Two things follow. First, a
+prompt-level requirement for a correctness argument suppresses this class of edit in one model but not
+the other, so it cannot be relied on as a defence. Second, the benchmark's own verification passes in
+every one of these runs, so no output-comparison gate would have caught them. This is what E2
+addresses.
+
+\subsection{E2: The Semantic-Preservation Constraint}
+\label{sec:intent}
+\paragraph{The exploit.}
+\texttt{atomicSystemWide} exists to measure system-wide atomic throughput: each thread performs
+\texttt{loop\_num} system-scope \texttt{atomicAdd\_system(\&atom\_arr[0],\,10)} operations, and the
+program then checks the accumulated total. Without the constraint, both models removed the loop and
+kept the total. GPT-5 replaced it with one atomic per thread carrying the pre-summed value, annotating
+its own source \textit{``one store per warp is sufficient for postcondition used by verification'';}
+Gemini collapsed it further, to a single \texttt{atomicAdd\_system(\&atom\_arr[0], blockDim.x * 10 *
+loop\_num)} per block. Both versions print the same output and pass the program's own check.
+
+\paragraph{Effect of the constraint.}
+Table~\ref{tab:intent} reports the outcome. Without the constraint, the two models report
+$1504\times$ and $2809\times$; with it, all three constrained prompts return honest, roughly neutral
+results ($0.71$--$1.08\times$), and in every constrained candidate the per-iteration
+\texttt{atomicAdd\_system(\ldots,\,10)} is still present in the generated source. Two caveats apply to
+the ratios. The unconstrained and relaxed arms were generated and measured in the same interleaved
+session, but they differ in more than the constraint, since the relaxed prompt also lifts the
+prohibitions; the arms that isolate the constraint (original prohibitions plus the
+semantic-preservation block) were timed in a later session on the same node, rebuilt with a newer CUDA
+toolkit, where this benchmark's repetition spread is $16$--$20\%$. The result we draw from the table is
+therefore categorical---gaming against no gaming, confirmed by reading the generated source---rather
+than a precise ratio.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+% EDIT (2026-10-29): header rebuilt as two clean rows (the old one split "No constraint" over two
+% lines); values unchanged (pcrl/code_only from prof_ablation_cu133.csv, relaxed from three_arm_v2).
+\caption{E2: speedup of \texttt{atomicSystemWide} against the unmodified program, without the
+  semantic-preservation constraint and under the three prompts that carry it. $^\dagger$ = benchmark
+  gaming: the measured atomic loop is removed while output and the built-in check are unchanged. All
+  constrained candidates retain the per-iteration atomic; their exact ratios are not comparable across
+  sessions (see text).}
+\label{tab:intent}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+ & & \multicolumn{3}{c}{\textbf{With constraint}} \\
+\cmidrule(lr){3-5}
+\textbf{Model} & \textbf{No constraint} & \textbf{pcrl} & \textbf{code\_only} & \textbf{relaxed} \\
+\midrule
+GPT-5          & 1504$\times^\dagger$ & 0.88$\times$ & 1.08$\times$ & 0.94$\times$ \\
+Gemini 3.1 Pro & 2809$\times^\dagger$ & 0.81$\times$ & 1.01$\times$ & 0.71$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{E3: Production Applications}
+\label{sec:realapps}
+Table~\ref{tab:realapps} reports the speedups against the unmodified application.
+
+\begin{table}[t]
+\centering
+\footnotesize
+% EDIT (2026-10-29): caption now defines the three arms and is written for a reader who has not
+% seen the methodology section.
+\caption{E3: speedup of each application against its unmodified version, measured with the
+  application's own phase timer on the GH200 (medians over clean interleaved repetitions,
+  Section~\ref{sec:setup-e3}; every candidate passed its gate). \emph{Baseline} is the full prompt
+  with PC-sampling and roofline data; \emph{structural} relaxes the prohibitions and adds the derived
+  kernel-budget and occupancy summaries; \emph{hand} is an expert reference restricted to the same
+  single file. ``fail'' = no candidate passed the gate within three repair iterations.}
+\label{tab:realapps}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+\textbf{Application} & \textbf{Prompt} & \textbf{GPT-5} & \textbf{Gemini 3.1 Pro} & \textbf{Hand} \\
+\midrule
+\multirow{2}{*}{AutoDock-GPU}
+  & baseline    & 0.990$\times$ & 1.037$\times$ & \multirow{2}{*}{\textbf{1.532}$\times$} \\
+  & structural  & fail          & 1.001$\times$ & \\
+\midrule
+\multirow{2}{*}{Cholla}
+  & baseline    & \textbf{1.571}$\times$ & 1.504$\times$ & \multirow{2}{*}{1.468$\times$} \\
+  & structural  & 0.992$\times$ & 1.469$\times$ & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Cholla: every baseline-prompt output beats the hand reference.}
+The best model output in this table (GPT-5, $1.571\times$) beats the hand reference ($1.468\times$),
+and so does every other baseline-prompt sample we have: the profile-data ablation (E4) regenerated the
+same prompt for both models, giving $1.476\times$ (GPT-5) and $1.584\times$ (Gemini), timed in a
+later session in which this table's two candidates re-measured at $1.572\times$ and $1.504\times$.
+
+\paragraph{AutoDock-GPU: no candidate finds the restructuring.}
+The profitable change here is a cross-cutting restructuring, worth $1.532\times$ by hand. \emph{Every}
+candidate that built---three of the four model~$\times$~prompt cells, the fourth producing none---left
+the structure it rewrites in place and gained at most $3.7\%$. What the hand reference changed, and
+what the models changed instead, is described in Section~\ref{sec:whatmodels}.
+
+\paragraph{The structural prompt never helped and broke real builds.}
+Its contract was written for single-file benchmarks: it permits signature changes and states that the
+returned file must be self-contained. In Cholla the target kernel is declared in a header and called
+from ten sites in other translation units; both models changed the signature and both produced linker
+errors, each needing a repair iteration to revert. On AutoDock-GPU, whose target file is
+\texttt{\#include}d into another translation unit, GPT-5 redefined symbols already in scope and then
+produced an out-of-bounds global read (found with \texttt{compute-sanitizer}), failing all three
+iterations.
+
+\subsection{E4: Profile-Data Ablation}
+\label{sec:evidence}
+\label{sec:profabl}
+% EDIT (2026-10-27): HeCBench half re-timed. The first timing (2026-09-22) ran while a driver change on
+% the H100 node made CUDA 12.x binaries print wrong output and run 20-300x slow (real-applications
+% report, sec. 14). Same candidates, rebuilt with CUDA 13.3.1 and re-timed on the same node on
+% 2026-10-26 (experiments repo: scripts/optimas_study/rerun_cu133/); chemv excluded.
+Profiling data helps consistently on the large real application; on the small benchmarks it changes
+individual results by as much as on the application, but in both directions, with no net gain
+(Tables~\ref{tab:profabl} and~\ref{tab:profablhec}). On Cholla both models are clearly faster with
+the profile ($+11.5\%$ for GPT-5, $+7.7\%$ for Gemini), and the second, independently generated
+\texttt{pcrl} sample keeps both on the same side of the comparison (GPT-5 $1.187$, Gemini $1.023$
+relative to \texttt{code\_only}), although the Gemini replicate is much weaker than its first sample.
+On AutoDock-GPU both arms reach the same ${\sim}1.03\times$. Of the nineteen scored HeCBench pairs
+(GPT-5 produced no correct \texttt{code\_only} candidate for \texttt{background-subtract}), nine are
+ties by the rule of Section~\ref{sec:timing}, six favour the profile and four favour its absence.
+Counting only differences above $5\%$, four favour the profile (\texttt{convolutionSeparable}
+$+13.4\%$ and \texttt{bincount} $+8.4\%$ for GPT-5; \texttt{amgmk} $+13.5\%$ and
+\texttt{convolutionSeparable} $+5.3\%$ for Gemini) and two go against it (Gemini \texttt{boxfilter}
+$-15.3\%$ at a $0.3\%$ spread, and Gemini \texttt{atomicSystemWide} $-19.9\%$ at a $16.3\%$ spread).
+The geometric mean of $\mathrm{pcrl}/\mathrm{co}$ is $1.003$ over the nine GPT-5 pairs and $0.979$
+over the ten Gemini pairs. Each pair is a single generation per arm, so an individual benchmark's sign
+may be sampling variance; what the benchmarks do not show is a consistent direction.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{E4 on the applications: speedup against the unmodified application for the prompt without
+  profile data (\texttt{co}) and with PC sampling + roofline (\texttt{pcrl}), and their ratio
+  (repetitions in Section~\ref{sec:setup-e4}). The HeCBench rows give the geometric mean of the
+  per-pair ratios in Table~\ref{tab:profablhec}.}
+\label{tab:profabl}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+\textbf{Application} & \textbf{Model} & \textbf{co} & \textbf{pcrl} & \textbf{pcrl/co} \\
+\midrule
+\multirow{2}{*}{Cholla}
+  & GPT-5  & 1.324$\times$ & \textbf{1.476}$\times$ & \textbf{1.115} \\
+  & Gemini & 1.471$\times$ & \textbf{1.584}$\times$ & \textbf{1.077} \\
+\midrule
+\multirow{2}{*}{AutoDock-GPU}
+  & GPT-5  & 1.030$\times$ & 1.031$\times$ & 1.001 \\
+  & Gemini & 1.035$\times$ & 1.035$\times$ & 1.000 \\
+\midrule
+HeCBench (9 pairs, geomean)  & GPT-5  & & & 1.003 \\
+HeCBench (10 pairs, geomean) & Gemini & & & 0.979 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{E4 on HeCBench (H100, CUDA 13.3.1, medians of $5$ clean repetitions per arm). Speedups are
+  against the unmodified benchmark; \emph{spr.} is the largest repetition spread of the pair, in
+  percent. A ratio in bold differs from $1$ by more than its pair's spread; the others are ties.
+  --- = no correct \texttt{code\_only} candidate.}
+\label{tab:profablhec}
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}lrrrrcrrrr@{}}
+\toprule
+ & \multicolumn{4}{c}{\textbf{GPT-5}} && \multicolumn{4}{c}{\textbf{Gemini 3.1 Pro}} \\
+\cmidrule(lr){2-5}\cmidrule(lr){7-10}
+\textbf{Benchmark} & \textbf{co} & \textbf{pcrl} & \textbf{pcrl/co} & \textbf{spr.} &&
+  \textbf{co} & \textbf{pcrl} & \textbf{pcrl/co} & \textbf{spr.} \\
+\midrule
+\texttt{adv}                  & 0.997 & 0.999 & 1.002 & 19.1 && 1.002 & 0.994 & 0.992 & 14.5 \\
+\texttt{amgmk}                & 0.979 & 0.989 & 1.010 & 11.8 && 0.878 & 0.996 & \textbf{1.135} & 5.4 \\
+\texttt{atomicSystemWide}     & 1.075 & 0.876 & 0.815 & 19.5 && 1.010 & 0.809 & \textbf{0.801} & 16.3 \\
+\texttt{background-subtract}  & ---   & 1.638 & ---   & 16.4 && 1.574 & 1.581 & 1.004 & 11.1 \\
+\texttt{bincount}             & 1.000 & 1.084 & \textbf{1.084} & 0.1 && 1.359 & 1.364 & \textbf{1.004} & 0.1 \\
+\texttt{blockAccess}          & 1.021 & 1.004 & \textbf{0.984} & 0.9 && 1.000 & 1.003 & 1.004 & 0.9 \\
+\texttt{boxfilter}            & 1.079 & 1.113 & \textbf{1.032} & 0.2 && 1.796 & 1.521 & \textbf{0.847} & 0.3 \\
+\texttt{ccsd-trpdrv}          & 1.006 & 1.005 & 0.999 & 31.6 && 1.030 & 1.019 & 0.989 & 37.4 \\
+\texttt{concat}               & 0.937 & 0.933 & \textbf{0.995} & 0.1 && 1.350 & 1.350 & 1.000 & 0.4 \\
+\texttt{convolutionSeparable} & 0.999 & 1.133 & \textbf{1.134} & 1.1 && 1.084 & 1.141 & \textbf{1.053} & 0.8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Correctness, not only speed.}
+% EDIT (2026-10-27): background-subtract re-checked on 2026-10-26 with CUDA 13.3.1: the unmodified
+% program passes (max error 0) and all three code_only candidates fail (max error 93).
+One HeCBench pair favours the profile arm on correctness rather than time. On
+\texttt{background-subtract}, GPT-5 without profile data failed the benchmark's own output check in
+all three repair iterations and produced no usable candidate, while the \texttt{pcrl} arm produced a
+correct one ($1.638\times$). Because these candidates were generated on the H100 node while it was
+faulty (Section~\ref{sec:limits}), we rebuilt all three rejected candidates with the working toolchain:
+the unmodified program passes with zero error, and each candidate still fails, with a maximum pixel
+error of $93$.
+
+\subsection{E5: Prescriptive Guidance}
+\label{sec:guidvar}
+Table~\ref{tab:guidvar} reports the four arms. Half of the rows have a repetition spread below $5\%$,
+including the two largest effects of the checklist, so those differences are not measurement
+artifacts.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{2pt}
+\caption{E5: speedup against the unmodified program under the constrained (\emph{base}) prompt, the
+  relaxed (\emph{struct}) prompt and the relaxed prompt plus the prescriptive checklist (\emph{diag});
+  interleaved medians on one idle GH200. \textbf{Bold} marks the cases discussed in the text.
+  ``spread'' is the largest repetition spread across the four arms. \texttt{chemv} is excluded
+  (see text).}
+\label{tab:guidvar}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+\textbf{Benchmark} & \textbf{Model} & \textbf{base} & \textbf{struct} & \textbf{diag} & \textbf{spread} \\
+\midrule
+\texttt{concat}               & GPT-5  & 1.031$\times$ & 0.838$\times$ & \textbf{0.349}$\times$ & 0.1\% \\
+\texttt{boxfilter}            & GPT-5  & \textbf{10.280}$\times$ & 6.352$\times$ & 5.503$\times$ & 0.0\% \\
+\midrule
+\texttt{bincount}             & GPT-5  & 1.035$\times$ & 1.037$\times$ & \textbf{1.374}$\times$ & 5.2\% \\
+\texttt{bincount}             & Gemini & 1.106$\times$ & 1.003$\times$ & \textbf{1.380}$\times$ & 4.4\% \\
+\texttt{concat}               & Gemini & 1.001$\times$ & \textbf{1.797}$\times$ & 1.798$\times$ & 46.8\% \\
+\texttt{boxfilter}            & Gemini & 8.691$\times$ & 8.930$\times$ & 9.371$\times$ & 42.6\% \\
+\texttt{convolutionSeparable} & Gemini & 1.418$\times$ & 1.499$\times$ & 1.514$\times$ & 19.3\% \\
+\midrule
+\texttt{blockAccess}          & both   & $\approx 1.00\times$ & $\approx 1.00\times$ & $\approx 1.00\times$ & 0.2\% \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\paragraph{The checklist produces our largest gain.}
+On \texttt{bincount} it takes both models from roughly $1.00$--$1.04\times$ under the structural prompt
+to $1.37$--$1.38\times$, approaching our hand-tuned reference ($1.392\times$). The other large
+improvement in the table is not the checklist's: on \texttt{concat} under Gemini the $1.80\times$
+appears already under the structural prompt ($1.797\times$), whose relaxed rules permit the vectorized
+templating it needs, and the checklist adds nothing ($1.798\times$) at a $46.8\%$ spread.
+
+\paragraph{It also produces our largest loss.}
+On \texttt{concat}, GPT-5 followed the instruction to process several elements per thread literally,
+to one thread per $128$-element line: a $128\times$ collapse in parallelism, measured at $0.349\times$
+against $0.838\times$ without the checklist, with a $0.1\%$ spread. On \texttt{boxfilter}, GPT-5's
+$10.280\times$ under the baseline prompt falls to $6.352\times$ when the prohibitions are relaxed and
+to $5.503\times$ with the checklist added; most of that loss belongs to the relaxation, not to the
+checklist. All \texttt{boxfilter} results exceed our $5\times$ alarm, so we read the diffs: every
+candidate keeps the timing loop and both kernel launches per cycle, and gains by tiling the column
+pass over rows, which the original runs as one thread per image column ($30$ blocks of $64$ threads
+for a $1920$-pixel-wide image); the benchmark's own check compares every output pixel exactly with a
+host implementation.
+
+\paragraph{Net effect.}
+Averaged over all twelve (benchmark, model) pairs the checklist is close to neutral---a geometric mean
+of $0.97\times$ against the structural prompt, with individual pairs from $0.42\times$ to
+$1.38\times$. The same prompt component that produces $1.380\times$ on one benchmark produces
+$0.349\times$ on another, both at sub-$5\%$ spread; the spread of outcomes, not their mean, is the
+result (Section~\ref{sec:profdisc}).
+
+\paragraph{An excluded outlier: \texttt{chemv}.}
+% NEW (2026-10-26). Evidence: chemv-verification-vacuous (experiments memory), report sec. 13.3/14,
+% and a re-check on illyad (CUDA 13.3.1, 2026-10-26) of every chemv candidate with REPEAT=1 against
+% the CPU reference: max relative error 2.2e-7 for the unmodified program and for Gemini's baseline
+% candidate, at most 1.1e-6 for any candidate.
+We exclude \texttt{chemv} from every table because its built-in verification cannot certify a result.
+Its timing loop launches both kernels $1000$ times, accumulating into the same output vector without
+re-initializing it, and then compares that vector with a single application of the CPU reference: the
+check fails for the unmodified program, or---once the accumulated values overflow to NaN---passes
+vacuously, because a comparison with NaN is never true. The case is nonetheless instructive. Under the
+baseline prompt, Gemini rewrote both polyhedral-compiler-generated kernels: it replaced each thread's
+tiled loop nest (an outer loop over $32$-element tiles with a barrier per tile, and an inner loop
+clipped to the tile) by a single loop over the same elements of its row, removed the barriers---which
+the computation does not need, since each thread updates only its own output element and the kernels
+use no shared memory---and accumulated in registers instead of reading and writing the output in global
+memory on every iteration. The number of multiply-adds is unchanged; what was removed is loop structure
+that correct output does not require. The benchmark timed it at $7.8\times$, over our $5\times$ alarm,
+so we checked it outside the benchmark's harness, running one application of the two kernels (no
+repeat loop, so nothing overflows) against the CPU reference: its largest relative error is
+$2.2\times10^{-7}$, identical to the unmodified program's, and no \texttt{chemv} candidate from either
+model in the baseline, structural, checklist or profile-data arms exceeds $1.1\times10^{-6}$. Under the
+checklist the same model kept the original tile loops and added the shared-memory staging the checklist
+named. We report the case as an example of the pipeline removing loops that correctness does not
+need---the legitimate counterpart of the gaming of E2, which removed a loop the measurement does
+need---and not as a measured speedup, since the timing that produced it rests on a loop whose output is
+NaN.

@@ -1,0 +1,272 @@
+\section{Discussion}
+\label{sec:discussion}
+% EDIT (2026-10-29): new section built from the old 5.3 (findings), 6.1--6.2 (gaming discussion,
+% detection), 7.4 (what the models changed), 8.1--8.2 (interpretation), 9 (pitfalls, defects) and 10
+% (threats to validity), following the reviewer's requested structure. No new number.
+This section draws out what the five experiments mean: which prompt components matter, why benchmark
+gaming is a benchmark problem rather than a model problem, what the models change and what they miss,
+what profiling data is worth, and where the evaluation itself is limited.
+
+\subsection{Which Prompt Components Matter}
+\label{sec:analysis}
+% EDIT (2026-10-29): restated as a list, as asked in review; every item is read off Tables 1 and 3.
+The prompt components are not equally important, and E1 ranks them:
+\begin{itemize}\itemsep2pt
+  \item \textbf{The correctness argument is the instruction whose removal costs the most.} Removing
+    it alone cuts first-attempt success to $8$ of $12$ runs, against $10$--$11$ for every other single
+    removal (the \texttt{minimal} prompt, which drops it together with every other instruction,
+    still reaches $10$, so the cost comes from keeping the long rule list without the argument that
+    anchors it). Removing it is also what lets Gemini game \texttt{shmembench}, and it is the variant
+    that gives Gemini its slowest valid result on four of six benchmarks. The requirement costs nothing
+    in peak speedup: the best \texttt{bitonic-sort} results of both models are reached with it in
+    place.
+  \item \textbf{For GPT-5 the instructions matter as a block more than one by one.} No single removal
+    hurts it consistently, but stripping the block to one sentence (\texttt{minimal}) gives its slowest
+    valid result on four of five benchmarks, by $31$--$34\%$ on two of them.
+  \item \textbf{The step-by-step instruction is the safest with respect to slow results and the least
+    safe with respect to failures.} \texttt{cot} never gives either model its slowest valid result and
+    reaches the best observed speedup for both, but Gemini produced no valid candidate under it on two
+    of six benchmarks.
+  \item \textbf{The prohibitions and the explanation lists act differently on the two models.}
+    Removing the prohibitions produces GPT-5's best \texttt{bitonic-sort} result and one of Gemini's
+    worst; removing the explanation lists is Gemini's best variant on the same benchmark and has no
+    consistent effect elsewhere. Neither can be recommended or dropped without naming the model.
+  \item \textbf{The hardware guidance shows no consistent effect on speed}; its removal produced the
+    grid's only timeout, for GPT-5 on \texttt{accuracy}, which Gemini completed without incident.
+  \item \textbf{Reliability, not peak speedup, is where models and variants differ most.} GPT-5
+    succeeds at the first attempt in $32$ of $36$ runs and Gemini~2.5~Pro in $26$; the best speedup
+    either reaches is $1.14\times$.
+\end{itemize}
+
+\subsection{Benchmark Gaming and Legitimate Work Removal}
+\label{sec:gaming-disc}
+% EDIT (2026-10-29): adds the point, asked for in review, that in a generic setting removing
+% computation that correct output does not need is good; built from the old 6.2 and the chemv
+% paragraph of 8.2.
+In a generic setting, the edit that E2 calls gaming is good. A program that produces the correct output
+with less computation is a faster program; compilers remove dead code for exactly this reason, and for
+an application---whose users care about its answer, not about how much work produced it---removing
+work the answer does not need is the goal. \texttt{chemv} (E5) is this case: the model removed loop
+structure and barriers that correct output does not require, kept every multiply-add, and the result is
+numerically identical to the original.
+
+A benchmark is different because its purpose is the work itself. \texttt{atomicSystemWide} exists to
+measure how fast the hardware performs system-scope atomics; a version that performs one atomic
+instead of \texttt{loop\_num} of them prints the right total and measures nothing. The same program
+transformation is therefore an optimization in one context and a meaningless result in the other,
+which is why the semantic-preservation block is scoped to \emph{benchmark scaffolding}---timing,
+repeat and convergence loops, verification code, fixed inputs, printed output---and leaves genuine
+redundancy inside an application open to elimination. Two further points follow from E1 and E2.
+First, a requirement to argue correctness suppresses gaming in one model (Gemini) but not the other
+(GPT-5, which gamed \texttt{shmembench} under every variant), so it cannot serve as the defence; the
+explicit constraint worked for both. Second, neither output comparison nor the benchmark's own check
+can detect this class of edit, by construction, because the exploit preserves the printed result. Our
+detection rule is an implausibility threshold---any speedup above $5\times$---followed by reading the
+diff. It is cheap enough to run on every candidate, and it also exposed a $31\times$ \texttt{amgmk}
+candidate that had deleted the benchmark's report sections. Its limit is equally clear: a gaming
+transformation yielding, say, $1.5\times$ would not be flagged, and we cannot rule out such cases in the
+reported numbers (Section~\ref{sec:limits}).
+
+\subsection{What the Models Change, and What They Miss}
+\label{sec:whatmodels}
+% EDIT (2026-10-29): the optimization details moved here from the old 7.4, as asked in review.
+The applications show the same pattern from both sides. On Cholla, both GPT-5 and the hand reference
+replace $18$ double-precision divisions by $6$ reciprocal multiplications; GPT-5 additionally removes
+integer index arithmetic that was used only for a bounds check, which reduces register pressure from
+$109$ to $89$ registers per thread without spilling.
+These are local, exact transformations: each is confined to a few lines, each is provably equivalent,
+and each is the kind of change the models found reliably across benchmarks as well---reciprocal
+reuse, redundant index arithmetic removed, read-only loads. On AutoDock-GPU the profitable change is
+of a different kind. The hand reference fuses seven sequential block reductions, each with three
+barriers and a shared-memory atomic, into one pass, worth $1.532\times$; every candidate that built
+left all seven reductions in place and gained at most $3.7\%$. Restructuring across a whole kernel is
+what the models miss, and giving them more freedom did not help: the structural prompt never
+outperformed the baseline on either application.
+
+The three real-application failures share one cause: the model cannot see how its file is compiled,
+whether it is a standalone translation unit or textually included, which symbols are already in scope,
+and which declarations other files depend on. This never arises for a self-contained benchmark and
+is, in our experience, the dominant failure mode on real code. It also means some optimizations a human
+would make---changing a header, a launch site or a build flag---are out of reach by construction. Two
+directions follow. The prompt should carry the file's \emph{compilation context}, which is cheap to
+extract and addresses this failure mode directly; and the structural freedom that helps on standalone
+kernels needs a real-application contract that forbids changing externally visible signatures while
+still allowing file-internal restructuring.
+
+\subsection{Profiling Data, Raw and Interpreted}
+\label{sec:profdisc}
+E4's pattern is consistent with the workloads rather than with the models. A HeCBench kernel is a few
+hundred lines with one obvious hot loop, and the profile tells a model little it cannot infer from the
+source: it changes which edit the model makes, sometimes by more than $10\%$ either way, but it does not
+make the edit better on average. Cholla's HLLC solver is $307$ lines inside a 21k-line CUDA application
+whose cost is spread over several kernels; there the profile identifies both the kernel worth editing
+and the reason it is slow (latency-bound at $19.7\%$ DRAM and $40.4\%$ SM throughput, occupancy $23\%$
+limited by $109$ registers per thread). We therefore expect profile data to pay off in proportion to
+how hard the bottleneck is to locate from source alone, which is the regime real applications occupy.
+With one application showing the gain, this is a hypothesis rather than a measured law.
+
+E5 shows what happens when the data is interpreted for the model. A checklist of remedies is an anchor
+as much as a hint: when the listed transformation is the best available one, anchoring is worth a large
+factor (\texttt{bincount}, $1.00\times \to 1.38\times$ for both models); when it is not, the model
+applies it anyway (\texttt{concat}, where GPT-5 took ``several elements per thread'' to one thread per
+$128$-element line). The mean over twelve pairs is $0.97\times$, which is why a mean speedup, the
+statistic the literature reports, hides the effect; the result is the dispersion. Two practical
+consequences follow. Prescriptive guidance should be reported with its variance, not only its mean.
+And the guidance should be \emph{evidence rather than remedy}: state the measured condition (``$23\%$
+occupancy, limited by $109$ registers per thread'') and let the model decide what follows, instead of
+naming the transformation. We did not get to test that variant, and it is the first thing we would run
+next.
+
+\subsection{Benchmarks Versus Applications}
+\label{sec:bva}
+The benchmark results understate how much prompt design matters, because single-kernel benchmarks hide
+two of its effects. They cannot expose compilation-context failures, since each benchmark is a
+self-contained translation unit; and they make profiling data look worthless, since the hot loop of a
+$200$-line benchmark is obvious from the source. Both effects reappear on the production applications,
+which is the strongest argument we can offer against drawing conclusions about such systems from
+benchmark suites alone.
+
+\subsection{Evaluation Pitfalls and Tooling Defects}
+\label{sec:pitfalls}
+\label{sec:defects}
+Running the pipeline on production code exposed problems that benchmark runs had hidden, some of them
+in the evaluation itself. Table~\ref{tab:pitfalls} collects them with the practice we adopted in
+response.
+
+% NEW: summary table. Every row restates a finding made elsewhere in the paper; no new measurement.
+\begin{table}[t]
+\centering
+\footnotesize
+\caption{Evaluation pitfalls observed in this study, where each is discussed, and the practice adopted.}
+\label{tab:pitfalls}
+\begin{tabular}{@{}p{0.27\textwidth}p{0.10\textwidth}p{0.52\textwidth}@{}}
+\toprule
+\textbf{Pitfall} & \textbf{Section} & \textbf{Practice adopted} \\
+\midrule
+Edits that delete the measured work while preserving output and the built-in check
+  & \ref{sec:intent}, \ref{sec:gaming-disc} & Semantic-preservation constraint; any speedup above $5\times$ is a correctness alarm and its diff is read \\
+Driver update on a shared node: wrong output and inflated times, with no error
+  & \ref{sec:limits} & Re-time the unmodified program at the start of every session and compare with earlier measurements of the same binary \\
+Built-in check that cannot pass for the unmodified program, or prints no verdict
+  & \ref{sec:correctness}, \ref{sec:guidvar} & Run the unmodified program through the check first; exclude benchmarks whose check cannot pass; explicit gates for applications \\
+Drift between sessions on shared nodes (up to $49\%$ on the same binary)
+  & \ref{sec:timing} & Build once, interleave arms, wait for an idle GPU, log foreign GPU processes per repetition, require repetitions to agree \\
+Application output with no built-in check, or not reproducible run to run
+  & \ref{sec:correctness} & One gate per application, bit-exact or a statistical band; validate each gate by fault injection \\
+Wall clock dominated by setup (AutoDock-GPU CUDA setup: $68$\,s)
+  & \ref{sec:timing} & Use each application's own phase timer \\
+Prompt contents differing from what was believed sent
+  & \ref{sec:defects} & Defects fixed; earlier results reported as measured and not regenerated \\
+Single samples and noisy pairs
+  & \ref{sec:timing}, \ref{sec:limits} & Score a pair a tie when its difference is inside its own spread; treat sub-$5\%$ single-cell effects as unresolved \\
+Compilation context invisible to a single-file editor
+  & \ref{sec:whatmodels} & Reported as the dominant real-code failure mode; carrying that context in the prompt is future work \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Prompt-fidelity defects exposed by real code.}
+Running production applications through the loop surfaced a class of problem that benchmark runs had
+hidden for months: the prompt the model actually received was not the prompt we believed we were
+sending. Table~\ref{tab:defects} lists the defects we found and fixed. They fall into two groups.
+\emph{Summarization} defects corrupt the profiling evidence---a shared-memory footprint of
+$7.43$\,Kbyte presented to the model as ``7 bytes'', SI \texttt{Kbyte} read as $1024$ bytes, and, most
+seriously, a CSV reader that parsed every section of an Nsight Compute source page against the first
+section's header and silently dropped rows of any other width. On one benchmark that left $36$ of $76$
+stall rows in the prompt; re-running $56$ profiled inputs after the fix changed four of them, all by
+\emph{gaining} rows. \emph{Loop} defects corrupt the repair channel: a build timeout reported to the
+model as a fault in its own code, and an error filter that kept only lines matching
+\texttt{error}$|$\texttt{fatal}$|$\texttt{undefined reference}, so that a linker's explanatory line
+(\texttt{multiple definition of \ldots first defined here}) was discarded and the model saw only
+\texttt{ld returned 1 exit status}.
+
+One defect deserves separate mention because it is a design decision rather than an oversight. The
+pipeline strips all comments from the source before prompting, to save tokens, and then replaces the
+original file with the model's full-file answer---so every optimized file lost its license header and
+all of its documentation. We initially, and wrongly, attributed the missing LGPL header of AutoDock-GPU
+to the models; the prompts contained no occurrence of ``Copyright''. We now re-attach the original
+leading comment block when it is a license and the candidate lacks it, but the general question stands:
+comment stripping also discards institutional knowledge such as \texttt{// DO NOT UNDEFINE} directives
+that exist precisely to stop the edit an optimizer is about to make.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\caption{Prompt-fidelity defects found while running production applications, and what each one
+  corrupted. All were present during the benchmark study.}
+\label{tab:defects}
+\begin{tabular}{@{}p{0.30\columnwidth}p{0.63\columnwidth}@{}}
+\toprule
+\textbf{Defect} & \textbf{Effect} \\
+\midrule
+Shared memory read without unit & $7.43$\,Kbyte/block shown as ``7 bytes''; static and dynamic sizes
+  summed across units \\
+\texttt{Kbyte} treated as $1024$\,B & $2.4\%$ error in every stated size \\
+Per-section CSV headers ignored & $25$ of $26$ sections dropped on one input ($36/76$ stall rows
+  reached the model) \\
+Stall reasons from a Python \texttt{set} & Prompt text not reproducible across processes \\
+Kernel names matched verbatim & Namespaced and templated kernels fell back to the capped launch count \\
+Comments stripped before prompting & Optimized files lost their license header and all documentation \\
+Echoed line numbers not stripped & Uncompilable output when a model echoes the numbered source \\
+Fixed $300$\,s build timeout & Real-application rebuilds reported to the model as its own fault \\
+Linker cause lines filtered out & Repair prompt contained no actionable error \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Limitations and Threats to Validity}
+\label{sec:limits}
+% EDIT (2026-10-29): condensed from the old Section 10; the measurement protocol and the gate
+% definitions are stated in Section 2 and not repeated.
+\paragraph{Measurement.}
+Even under the protocol of Section~\ref{sec:timing}, residual interference cannot be excluded on a
+shared machine: in one Cholla pass three repetitions drifted by $15\%$ while our detector reported no
+foreign GPU process. Measurement noise alone puts a floor of roughly $2\%$ under any effect we report on
+the applications, and far higher on the noisiest benchmarks, where per-repetition spread exceeds
+$30\%$. The benchmark half of E4 was first timed after a driver update on the shared H100 node, which
+made binaries built with CUDA 12.x print wrong output and run $20$--$300\times$ slower without failing;
+unmodified benchmarks then printed FAIL from their own checks and two exceeded our $600$\,s per-run cap.
+We detected this only by comparing against earlier measurements of the same binaries, discarded that
+timing, and re-timed the same candidates rebuilt with CUDA 13.3.1; Section~\ref{sec:profabl} reports
+only the re-timing. The candidates themselves were generated on the faulty node, so a candidate
+rejected by the generation-time check could have been rejected wrongly; the one case where this decides
+a result (\texttt{background-subtract}, GPT-5) we re-checked with the working toolchain, and the
+rejection stands.
+
+\paragraph{Tooling defects.}
+The defects of Table~\ref{tab:defects} were all present during E1: profiling summaries reached the
+model with wrong units, truncated stall data and understated launch counts, and the repair channel
+discarded the diagnostics a model needed. They are fixed, but every result predating a fix was produced
+with the affected prompt. We report E1 as measured rather than re-running the grid, and we do not claim
+that it would reproduce unchanged on the corrected summarizers.
+
+\paragraph{Sampling of model outputs.}
+Except where stated, each (program, model, prompt) cell is a single LLM sample, so a cell conflates the
+prompt's effect with sampling variance. Only one setting is replicated: a second, independently
+generated sample of the baseline prompt on both applications, which keeps Cholla on the same side of
+the profile-data comparison and reproduces AutoDock-GPU's tie. The prescriptive-guidance comparison
+(E5) has no valid replicate: a second generation round was timed on the H100 node during the fault
+described above and was stopped after six pairs. Combined with the measurement floor, an effect below
+roughly $5\%$ in a single cell should be treated as unresolved rather than small. E4 spans $24$ pairs
+and scores $23$; its positive result rests on a single application, Cholla, with two models, and the
+nineteen benchmark pairs show that profile data moves results in both directions there, not that the
+gain on Cholla generalizes to other large applications.
+
+\paragraph{Correctness is empirical.}
+The gates of Section~\ref{sec:correctness} were validated by fault injection, but a subtle accuracy
+loss that stays inside the AutoDock-GPU band would pass, and the gates check printed outputs rather
+than all internal state. For the three benchmarks that print no verdict (\texttt{amgmk},
+\texttt{atomicSystemWide}, \texttt{bincount}), correctness rests on the pipeline's generation-time
+check and on our reading of the diffs, which is weaker than the application gates. Gaming is detected
+heuristically (Section~\ref{sec:gaming-disc}): the $5\times$ alarm catches every case we observed,
+all of them above $30\times$, but would miss a small one.
+
+\paragraph{Scope.}
+We optimize the execution time of one GPU kernel file under a correctness gate; energy, memory
+footprint, multi-GPU scaling, numerical stability over long runs and the maintainability of the
+generated code are not studied. Results cover NVIDIA GPUs only, one architecture per study, so an
+effect that depends on register file size, SM count or cache hierarchy would be invisible to us, and
+the E1 profiles were collected on an A100 and used on an H100. We use two proprietary models whose
+weights and versions we do not control; the same prompt may behave differently after a model update,
+and the Gemini version changed between E1 and the later experiments.
